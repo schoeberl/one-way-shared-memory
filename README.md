@@ -1,6 +1,6 @@
 # One-Way Shared Memory
 
-This project is about a novel idea for on-chip communication between processing cores.
+This paper presents novel idea for on-chip communication between processing cores.
 Each processor has a local memory (scratchpad memory (SPM)). A simple network-on-chip
 moves data from a region in the local SPM to a SPM in a remote processing core.
 This is done continually, which means that data is continually updated.
