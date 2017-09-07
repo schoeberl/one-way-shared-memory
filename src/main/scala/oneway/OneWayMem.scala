@@ -43,48 +43,47 @@ class Router(schedule: Array[Array[Int]]) extends Module {
   val regCounter = RegInit(UInt(0, 16))
   // Reg of Vec o Vec of Reg?
   // to check how to do a SingleChannel
-  val regOut = Vec(Const.NR_OF_PORTS, Reg(init = UInt(0, 32)))//new SingleChannel()))
+  // val regOut = Vec(Const.NR_OF_PORTS, Reg(init = UInt(0, 32))) //new SingleChannel()))
 
   regCounter := Mux(regCounter === UInt(schedule.length - 1), UInt(0), regCounter + UInt(1))
 
   // Schedule table as a Chisel table
-  val sched = Vec(schedule.length, Vec(Const.NR_OF_PORTS, UInt(width=3)))
+  val sched = Vec(schedule.length, Vec(Const.NR_OF_PORTS, UInt(width = 3)))
   for (i <- 0 until schedule.length) {
     val a = new Array[UInt](Const.NR_OF_PORTS)
-    for (j <- 0 until Const.NR_OF_PORTS) a(j) = UInt(sched(i)(j), 3)
+    for (j <- 0 until Const.NR_OF_PORTS) a(j) = UInt(schedule(i)(j), 3)
     sched(i) := Vec[UInt](a)
   }
 
   val currentSched = sched(regCounter)
 
   // This Mux is a little bit wasteful, as it allows from all
-  // ports to all ports
+  // ports to all ports. A 4:1 instead if the 5:1 is way cheaper in an 4-LUT FPGA
   for (i <- 0 until Const.NR_OF_PORTS) {
-    regOut(i) := io.ports(currentSched(i)).in
-    io.ports(i).out := regOut(i)
-    // the following shorter version does not consume any LCs. Why?
-    // But the upper version also not much? Just the additional reset?
-    // Is this indexing into a Vec really the Mux?
-    // io.ports(i).out := Reg(next = io.ports(currentSched(i)).in)
+    // regOut(i) := io.ports(currentSched(i)).in
+    // io.ports(i).out := regOut(i)
+    // just Reg(io...) is optimized away, next is needed. Why?
+    io.ports(i).out := Reg(next = io.ports(currentSched(i)).in)
   }
 }
 
 object Router extends App {
 
-  // Generate a schedule
-  val slen = 7
-  val schedule = new Array[Array[Int]](slen)
-  for (i <- 0 until slen) {
-    val oneSlot = new Array[Int](Const.NR_OF_PORTS)
-    for (j <- 0 until Const.NR_OF_PORTS) {
-      oneSlot(j) = Random.nextInt(5)
+  def genSchedule() = {
+    val slen = 7
+    val schedule = new Array[Array[Int]](slen)
+    for (i <- 0 until slen) {
+      val oneSlot = new Array[Int](Const.NR_OF_PORTS)
+      for (j <- 0 until Const.NR_OF_PORTS) {
+        oneSlot(j) = Random.nextInt(5)
+      }
+      schedule(i) = oneSlot
     }
-    schedule(i) = oneSlot
+    schedule
   }
 
   chiselMain(Array("--backend", "v", "--targetDir", "generated"),
-    () => Module(new Router(schedule)))
-
+    () => Module(new Router(genSchedule())))
 }
 
 /**
