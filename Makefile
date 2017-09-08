@@ -9,6 +9,9 @@ help:
 test:
 	sbt "test:runMain oneway.RouterTester"
 
+network:
+	sbt "test:runMain oneway.NetworkTester"
+
 hardware:
 	sbt "runMain oneway.Router"
 
