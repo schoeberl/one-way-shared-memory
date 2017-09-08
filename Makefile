@@ -1,7 +1,20 @@
-# Start with a tester to get stuff going
 
-SBT = sbt
+help:
+	# Makefile for the One-Way Memory Design
+	# Targets:
+	#   make test
+	#   make hardware
+	#
 
-counter:
-	$(SBT) "test:runMain oneway.OneWayMemTester"
+test:
+	sbt "test:runMain oneway.RouterTester"
+
+hardware:
+	sbt "runMain oneway.Router"
+
+
+clean:
+	-rm -rf generated
+	-rm -rf target
+	-rm -rf project
 

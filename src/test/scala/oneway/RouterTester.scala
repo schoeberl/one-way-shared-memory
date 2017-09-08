@@ -12,19 +12,18 @@ package oneway
 import Chisel._
 
 /**
- * Test the counter by printing out the value at each clock cycle.
+ * Test the router by printing out the value at each clock cycle.
  */
 class RouterTester(c: Router) extends Tester(c) {
 
   for (i <- 0 until 5) {
-    poke(c.io.ports(0).in, 1)
-    poke(c.io.ports(1).in, 2)
-    poke(c.io.ports(2).in, 3)
-    poke(c.io.ports(3).in, 4)
-    poke(c.io.ports(4).in, 5)
-    println(i)
-    println(peek(c.io.ports))
+    poke(c.io.ports(0).in.data, 0x10+i)
+    poke(c.io.ports(1).in.data, 0x20+i)
+    poke(c.io.ports(2).in.data, 0x30+i)
+    poke(c.io.ports(3).in.data, 0x40+i)
+    poke(c.io.ports(4).in.data, 0x50+i)
     step(1)
+    println(peek(c.io.ports))
   }
 }
 
@@ -35,7 +34,7 @@ object RouterTester {
   def main(args: Array[String]): Unit = {
     chiselMainTest(Array("--genHarness", "--test", "--backend", "c",
       "--compile", "--targetDir", "generated"),
-      () => Module(new Router(Router.genSchedule()))) {
+      () => Module(new Router(Router.genRandomSchedule(7)))) {
         c => new RouterTester(c)
       }
   }
