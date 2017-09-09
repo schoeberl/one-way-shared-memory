@@ -14,31 +14,29 @@ import Chisel._
 /**
  * Test the router by printing out the value at each clock cycle.
  */
-class RouterTester(c: Router) extends Tester(c) {
+class NetworkTester(c: NetworkOfFour) extends Tester(c) {
 
-  for (i <- 0 until 5) {
-    poke(c.io.ports(0).in.data, 0x10 + i)
-    poke(c.io.ports(1).in.data, 0x20 + i)
-    poke(c.io.ports(2).in.data, 0x30 + i)
-    poke(c.io.ports(3).in.data, 0x40 + i)
-    poke(c.io.ports(4).in.data, 0x50 + i)
+  for (i <- 0 until 8) {
+    poke(c.io.local(0).in.data, 0x10+i)
+    poke(c.io.local(1).in.data, 0x20+i)
+    poke(c.io.local(2).in.data, 0x30+i)
+    poke(c.io.local(3).in.data, 0x40+i)
     step(1)
-    println(peek(c.io.ports))
+    println(peek(c.io.local))
   }
-  expect(c.io.ports(0).out.data, 0x14)
-  expect(c.io.ports(4).out.data, 0x44)
+  expect(c.io.local(0).out.data, 0x45)
 
 }
 
 /**
  * Create a counter and a tester.
  */
-object RouterTester {
+object NetworkTester {
   def main(args: Array[String]): Unit = {
     chiselMainTest(Array("--genHarness", "--test", "--backend", "c",
       "--compile", "--targetDir", "generated"),
-      () => Module(new Router(Schedule.gen2x2Schedule()))) {
-        c => new RouterTester(c)
+      () => Module(new NetworkOfFour())) {
+        c => new NetworkTester(c)
       }
   }
 }
