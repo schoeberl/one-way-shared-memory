@@ -27,22 +27,49 @@ ne
    e
  */
   val FourNodes =
-    "ne|" +
-      "  n|" +
-      "   e|"
+    "nel|" +
+      "  nl|" +
+      "   el|"
 
-  def getSchedule(s: String) {
+  def getSchedule(s: String) = {
 
-  }
-
-  def genRandomSchedule(slen: Int) = {
-    val schedule = new Array[Array[Int]](slen)
-    for (i <- 0 until slen) {
-      val oneSlot = new Array[Int](NR_OF_PORTS)
-      for (j <- 0 until NR_OF_PORTS) {
-        oneSlot(j) = Random.nextInt(5)
+    def port(c: Char) = {
+      c match {
+        case 'n' => NORTH
+        case 'e' => EAST
+        case 's' => SOUTH
+        case 'w' => WEST
+        case 'l' => LOCAL
+        case ' ' => 0
       }
-      schedule(i) = oneSlot
+    }
+
+    def nextFrom(c: Char) = {
+      c match {
+        case 'n' => 's'
+        case 'e' => 'w'
+        case 's' => 'n'
+        case 'w' => 'e'
+        case 'l' => 'x' // no next for the last
+        case ' ' => 'l' // stick to l on empty/waiting slots
+      }
+    }
+
+    val split = s.split('|')
+    val len = split.reduceLeft((a, b) => if (a.length > b.length) a else b).length
+    val schedule = new Array[Array[Int]](len)
+    for (i <- 0 until len) {
+      schedule(i) = new Array[Int](NR_OF_PORTS)
+    }
+    for (i <- 0 until split.length) {
+      var from = 'l'
+      for (j <- 0 until split(i).length) {
+        val to = split(i)(j)
+        if (to != ' ') {
+          schedule(j)(port(to)) = port(from)
+          from = nextFrom(to)
+        }
+      }
     }
     schedule
   }
@@ -59,16 +86,24 @@ ne
       Array(LOCAL, 0, 0, 0, WEST), // P2: local to north, P1: from west to local
       Array(0, LOCAL, 0, 0, SOUTH), // P3: local to east, P2: south to local
       Array(0, 0, 0, 0, WEST)) // P3: from west to local
-    // The last drain increases the schedule length by 1, but could be overlapped.
+    // The last drain from west to local increases the schedule length by 1, but could be overlapped.
     // Which means having it in the first slot, as there is no exit in the first slot
   }
 
+  def genRandomSchedule(slen: Int) = {
+    val schedule = new Array[Array[Int]](slen)
+    for (i <- 0 until slen) {
+      val oneSlot = new Array[Int](NR_OF_PORTS)
+      for (j <- 0 until NR_OF_PORTS) {
+        oneSlot(j) = Random.nextInt(5)
+      }
+      schedule(i) = oneSlot
+    }
+    schedule
+  }
+  
   def main(args: Array[String]): Unit = {
     print(getSchedule(FourNodes))
   }
-
-}
-
-class Schedule {
 
 }

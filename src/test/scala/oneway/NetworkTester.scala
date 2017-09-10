@@ -25,7 +25,6 @@ class NetworkTester(c: NetworkOfFour) extends Tester(c) {
     println(peek(c.io.local))
   }
   expect(c.io.local(0).out.data, 0x45)
-
 }
 
 /**

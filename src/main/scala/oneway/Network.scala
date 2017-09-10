@@ -21,7 +21,7 @@ class NetworkOfFour() extends Module {
     val local = Vec(new Channel(), 4)
   }
 
-  val schedule = Schedule.gen2x2Schedule()
+  val schedule = Schedule.getSchedule(Schedule.FourNodes)
   val net = new Array[Router](4)
   for (i <- 0 until 4) {
     net(i) = Module(new Router(schedule))

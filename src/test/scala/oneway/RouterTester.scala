@@ -37,7 +37,7 @@ object RouterTester {
   def main(args: Array[String]): Unit = {
     chiselMainTest(Array("--genHarness", "--test", "--backend", "c",
       "--compile", "--targetDir", "generated"),
-      () => Module(new Router(Schedule.gen2x2Schedule()))) {
+      () => Module(new Router(Schedule.getSchedule(Schedule.FourNodes)))) {
         c => new RouterTester(c)
       }
   }
