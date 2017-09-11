@@ -2,9 +2,6 @@
  * Copyright: 2017, Technical University of Denmark, DTU Compute
  * Author: Martin Schoeberl (martin@jopdesign.com)
  * License: Simplified BSD License
- * 
- * Start with a little bit of testing.
- * 
  */
 
 package oneway
@@ -12,7 +9,8 @@ package oneway
 import Chisel._
 
 /**
- * Test the router by printing out the value at each clock cycle.
+ * Test the router by printing out the value at each clock cycle
+ * and checking some known end values.
  */
 class RouterTester(c: Router) extends Tester(c) {
 
@@ -30,9 +28,6 @@ class RouterTester(c: Router) extends Tester(c) {
 
 }
 
-/**
- * Create a counter and a tester.
- */
 object RouterTester {
   def main(args: Array[String]): Unit = {
     chiselMainTest(Array("--genHarness", "--test", "--backend", "c",

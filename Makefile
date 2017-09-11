@@ -10,6 +10,7 @@ test:
 	sbt "test:runMain oneway.ScheduleTester"
 	sbt "test:runMain oneway.RouterTester"
 	sbt "test:runMain oneway.NetworkTester"
+	sbt "test:runMain oneway.NetworkCompare"
 
 network:
 	sbt "test:runMain oneway.NetworkTester"
