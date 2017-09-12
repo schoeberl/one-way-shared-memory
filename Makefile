@@ -24,3 +24,8 @@ clean:
 	-rm -rf target
 	-rm -rf project
 
+# format the schedule tables from the GitHub repo of s4noc.
+# see: ScheduleTable.scala for the url
+
+format:
+	sbt "runMain oneway.ScheduleTable ../../t-crest/s4noc/noc/vhdl/generated/bt2x2/bt2x2.shd"

@@ -20,7 +20,7 @@ class Network(n: Int) extends Module {
   }
 
   assert(UInt(n) === UInt(2), "Currently only 2x2 NoC supported")
-  val schedule = Schedule.getSchedule(Schedule.FourNodes)
+  val schedule = Schedule.getSchedule(ScheduleTable.FourNodes)
 
   val net = new Array[Router](n * n)
   for (i <- 0 until n * n) {

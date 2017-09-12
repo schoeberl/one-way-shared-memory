@@ -21,16 +21,6 @@ import scala.util.Random
 
 object Schedule {
 
-  /*
-ne
-  n
-   e
- */
-  val FourNodes =
-    "nel|" +
-      "  nl|" +
-      "   el|"
-
   def getSchedule(s: String) = {
 
     def port(c: Char) = {
@@ -103,7 +93,7 @@ ne
   }
   
   def main(args: Array[String]): Unit = {
-    print(getSchedule(FourNodes))
+    print(getSchedule(ScheduleTable.FourNodes))
   }
 
 }
