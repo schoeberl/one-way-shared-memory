@@ -15,8 +15,11 @@ test:
 network:
 	sbt "test:runMain oneway.NetworkTester"
 
-hardware:
+router:
 	sbt "runMain oneway.Router"
+
+hardware:
+	sbt "runMain oneway.OneWayMem"
 
 
 clean:
