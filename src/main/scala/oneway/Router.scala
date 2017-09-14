@@ -36,14 +36,20 @@ class Channel extends Bundle {
 
 class RouterPorts extends Bundle {
   val ports = Vec(new Channel(), Const.NR_OF_PORTS)
+  val tdmCounter = UInt(width = 8).asOutput
+  val tdmEnd = Bool().asOutput()
 }
 
 class Router(schedule: Array[Array[Int]]) extends Module {
   val io = new RouterPorts
 
   val regCounter = RegInit(init = UInt(0, 8))
+  val end = regCounter === UInt(schedule.length - 1)
 
-  regCounter := Mux(regCounter === UInt(schedule.length - 1), UInt(0), regCounter + UInt(1))
+  regCounter := Mux(end, UInt(0), regCounter + UInt(1))
+  
+  io.tdmCounter := regCounter
+  io.tdmEnd := end
 
   // Schedule table as a Chisel types table
   val sched = Vec(schedule.length, Vec(Const.NR_OF_PORTS, UInt(width = 3)))

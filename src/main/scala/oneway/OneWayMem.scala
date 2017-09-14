@@ -12,21 +12,24 @@ import Const._
 /**
  * Create and connect a n x n NoC.
  */
-class OneWayMem() extends Module {
+class OneWayMem(n: Int) extends Module {
   val io = new Bundle {
-    val dout = UInt(width = 32).asOutput
-    val local = Vec(new Channel(), 4)
+    val dout = Vec(UInt(width = 32), n*n).asOutput
   }
 
-  val net = Module(new Network(2))
-  for (i <- 0 until 4) {
-    net.io.local(i).in := io.local(i).in
-    io.local(i).out := net.io.local(i).out
+  val net = Module(new Network(n))
+
+  for (i <- 0 until n*n) {
+    val node = Module(new Node(i))
+    // how do we avoid confusing in/out names?
+    net.io.local(i).in := node.io.local.out
+    node.io.local.in := net.io.local(i).out
+    io.dout(i) := node.io.dout
   }
 }
 
 object OneWayMem extends App {
 
   chiselMain(Array("--backend", "v", "--targetDir", "generated"),
-    () => Module(new OneWayMem))
+    () => Module(new OneWayMem(2)))
 }
