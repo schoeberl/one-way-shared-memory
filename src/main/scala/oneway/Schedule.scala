@@ -61,6 +61,7 @@ object Schedule {
         }
       }
     }
+    println("Schedule is "+schedule.length+" clock cycles")
     schedule
   }
 

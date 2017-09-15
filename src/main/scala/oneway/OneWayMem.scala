@@ -23,7 +23,8 @@ class OneWayMem(n: Int) extends Module {
   val net = Module(new Network(n))
 
   for (i <- 0 until n * n) {
-    val node = Module(new DummyNode(i))
+    // val node = Module(new DummyNode(i))
+    val node = Module(new Node(i))
     // how do we avoid confusing in/out names?
     net.io.local(i).in := node.io.local.out
     node.io.local.in := net.io.local(i).out
