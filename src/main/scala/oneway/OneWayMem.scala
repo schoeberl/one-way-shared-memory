@@ -12,9 +12,10 @@ import Const._
 /**
  * Create and connect a n x n NoC.
  */
-class OneWayMem(n: Int) extends Module {
+class OneWayMem(n: Int, memSize: Int) extends Module {
   val io = new Bundle {
-    val dout = UInt(width = 32).asOutput
+    // val dout = UInt(width = 32).asOutput
+    val memPorts = Vec(new DualPort(memSize), n * n)
   }
 
   // Dummy output keep hardware generated
@@ -24,20 +25,21 @@ class OneWayMem(n: Int) extends Module {
 
   for (i <- 0 until n * n) {
     // val node = Module(new DummyNode(i))
-    val node = Module(new Node(i))
+    val node = Module(new Node(i, memSize))
     // how do we avoid confusing in/out names?
     net.io.local(i).in := node.io.local.out
     node.io.local.in := net.io.local(i).out
-    dout(i) := node.io.dout
+    io.memPorts(i) <> node.io.memPort
   }
 
-  val or = dout.fold(UInt(0))(_ | _)
-  io.dout := Reg(next = or)
+  // single output for the synthesizer results
+  // val or = dout.fold(UInt(0))(_ | _)
+  // io.dout := Reg(next = or)
 
 }
 
 object OneWayMem extends App {
 
   chiselMain(Array("--backend", "v", "--targetDir", "generated"),
-    () => Module(new OneWayMem(2)))
+    () => Module(new OneWayMem(2, 1024)))
 }

@@ -10,17 +10,17 @@ import Chisel._
 
 class Port(size: Int) extends Bundle {
   val addr = UInt(width = log2Up(size)).asInput
-  val din = UInt(width = 32).asInput
-  val dout = UInt(width = 32).asOutput
+  val wrData = UInt(width = 32).asInput
+  val rdData = UInt(width = 32).asOutput
   val wren = Bool().asInput
 }
 
 class DualPort(size: Int) extends Bundle {
   val rdAddr = UInt(width = log2Up(size)).asInput
   val wrAddr = UInt(width = log2Up(size)).asInput
-  val din = UInt(width = 32).asInput
-  val dout = UInt(width = 32).asOutput
-  val wren = Bool().asInput
+  val wrData = UInt(width = 32).asInput
+  val rdData = UInt(width = 32).asOutput
+  val wrEna = Bool().asInput
 }
 
 class DualPortMemory(size: Int) extends Module {
@@ -30,9 +30,9 @@ class DualPortMemory(size: Int) extends Module {
 
   val mem = Mem(UInt(width = 32), size, seqRead = true)
 
-  io.port.dout := mem(Reg(next = io.port.rdAddr))
-  when(io.port.wren) {
-    mem(io.port.wrAddr) := io.port.din
+  io.port.rdData := mem(Reg(next = io.port.rdAddr))
+  when(io.port.wrEna) {
+    mem(io.port.wrAddr) := io.port.wrData
   }
 
 }
@@ -50,19 +50,19 @@ class TrueDualPortMemory(size: Int) extends Module {
 
   val regAddrA = Reg(io.portA.addr)
   when(io.portA.wren) {
-    mem(io.portA.addr) := io.portA.din
+    mem(io.portA.addr) := io.portA.wrData
   }.otherwise {
     regAddrA := io.portA.addr
   }
-  io.portA.dout := mem(regAddrA)
+  io.portA.rdData := mem(regAddrA)
 
   // This does not generate a true dual-ported memory,
   // but a register based implementation
   val regAddrB = Reg(io.portB.addr)
   when(io.portB.wren) {
-    mem(io.portB.addr) := io.portB.din
+    mem(io.portB.addr) := io.portB.wrData
   }.otherwise {
     regAddrB := io.portB.addr
   }
-  io.portB.dout := mem(regAddrB)
+  io.portB.rdData := mem(regAddrB)
 }

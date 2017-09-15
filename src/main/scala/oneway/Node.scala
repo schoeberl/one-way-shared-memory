@@ -13,14 +13,16 @@ import Chisel._
  * providing the NI machinery, and adding a tester.
  * Provide some data in dout to get synthesize results.
  */
-class Node(n: Int) extends Module {
+class Node(n: Int, size: Int) extends Module {
   val io = new Bundle {
     val local = new Channel()
-    val dout = UInt(width = 32).asOutput
+    val memPort = new DualPort(size)
   }
 
   // TODO: shall get TDM schedule length from the actual schedule
   // for 2x2 it is 5
+  // for 3x3 it is 10
+  // for 4x4 it is 19
   val scheduleLength = 5
   val regTdmCounter = Reg(init = UInt(0, log2Up(scheduleLength)))
 
@@ -34,33 +36,24 @@ class Node(n: Int) extends Module {
   
   val address = Cat(regAddrCounter, regTdmCounter)
   
-  val dummy = io.local.in.data
-  
   // Receive data from the NoC
-  val memRx = Module(new DualPortMemory(1024))
+  val memRx = Module(new DualPortMemory(size))
   
   memRx.io.port.wrAddr := address
-  memRx.io.port.din := io.local.in.data
-  memRx.io.port.wren := Bool(true)
+  memRx.io.port.wrData := io.local.in.data
+  memRx.io.port.wrEna := Bool(true)
 
-  memRx.io.port.rdAddr := dummy
-  val d1 = memRx.io.port.dout
+  memRx.io.port.rdAddr := io.memPort.rdAddr
+  io.memPort.rdData := memRx.io.port.rdData
 
   // Send data to the NoC
-  val memTx = Module(new DualPortMemory(1024))
+  val memTx = Module(new DualPortMemory(size))
 
-  memTx.io.port.wrAddr := dummy
-  memTx.io.port.din := dummy
-  memTx.io.port.wren := dummy(0)
+  memTx.io.port.wrAddr := io.memPort.wrAddr
+  memTx.io.port.wrData := io.memPort.wrData
+  memTx.io.port.wrEna := io.memPort.wrEna
 
   memTx.io.port.rdAddr := address
-  io.local.out.data := memTx.io.port.dout
+  io.local.out.data := memTx.io.port.rdData
   
-  
-  // just some dummy computation to keep synthesizer
-  // from optimzing everything away
-  val regAccu = Reg(init=UInt(n, 32))
-  regAccu := regAccu + d1
-  io.local.out.data := regAccu
-  io.dout := regAccu
 }
