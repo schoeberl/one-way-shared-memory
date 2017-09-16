@@ -29,7 +29,8 @@ class Node(n: Int, size: Int) extends Module {
   val end = regTdmCounter === UInt(scheduleLength-1)
   regTdmCounter := Mux(end, UInt(0), regTdmCounter + UInt(1))
   
-  val regAddrCounter = Reg(init = UInt(0, 4))
+  // For quicker testing use only 4 words per connection
+  val regAddrCounter = Reg(init = UInt(0, 2))
   when (end) {
     regAddrCounter := regAddrCounter + UInt(1)
   }

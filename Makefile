@@ -11,6 +11,10 @@ test:
 	sbt "test:runMain oneway.RouterTester"
 	sbt "test:runMain oneway.NetworkTester"
 	sbt "test:runMain oneway.NetworkCompare"
+	sbt "test:runMain oneway.OneWayMemTester"
+
+testone:
+	sbt "test:runMain oneway.OneWayMemTester"
 
 network:
 	sbt "test:runMain oneway.NetworkTester"
