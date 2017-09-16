@@ -24,18 +24,33 @@ class Node(n: Int, size: Int) extends Module {
   // for 3x3 it is 10
   // for 4x4 it is 19
   val scheduleLength = 5
+  
   val regTdmCounter = Reg(init = UInt(0, log2Up(scheduleLength)))
-
   val end = regTdmCounter === UInt(scheduleLength-1)
   regTdmCounter := Mux(end, UInt(0), regTdmCounter + UInt(1))
-  
   // For quicker testing use only 4 words per connection
   val regAddrCounter = Reg(init = UInt(0, 2))
   when (end) {
     regAddrCounter := regAddrCounter + UInt(1)
   }
-  
-  val address = Cat(regAddrCounter, regTdmCounter)
+
+  val address = Cat(regTdmCounter, regAddrCounter)
+
+  // There will be probably re-shuffling of data anyway.
+  // We would need a more elaborated address generation/translation.
+  // Need to go through it on paper.
+  // Or find a delay that works?
+  // Or better insert and read (and address increment) only when it is a valid slot?
+  val regTdmCounter2 = Reg(init = UInt(1, log2Up(scheduleLength)))
+  val end2 = regTdmCounter2 === UInt(scheduleLength-1)
+  regTdmCounter2 := Mux(end, UInt(0), regTdmCounter2 + UInt(1))
+  // For quicker testing use only 4 words per connection
+  val regAddrCounter2 = Reg(init = UInt(1, 2))
+  when (end2) {
+    regAddrCounter2 := regAddrCounter2 + UInt(1)
+  }
+
+  val address2 = Cat(regTdmCounter2, regAddrCounter2)
   
   // Receive data from the NoC
   val memRx = Module(new DualPortMemory(size))
@@ -54,7 +69,7 @@ class Node(n: Int, size: Int) extends Module {
   memTx.io.port.wrData := io.memPort.wrData
   memTx.io.port.wrEna := io.memPort.wrEna
 
-  memTx.io.port.rdAddr := address
+  memTx.io.port.rdAddr := address2
   io.local.out.data := memTx.io.port.rdData
   
 }
