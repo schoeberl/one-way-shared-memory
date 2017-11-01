@@ -41,6 +41,8 @@ class Node(n: Int, size: Int) extends Module {
   // Need to go through it on paper.
   // Or find a delay that works?
   // Or better insert and read (and address increment) only when it is a valid slot?
+  // Simple have a tiny table that knows in which cycles a word
+  // shall be read and the counters incremented, and the same on write.
   val regTdmCounter2 = Reg(init = UInt(1, log2Up(scheduleLength)))
   val end2 = regTdmCounter2 === UInt(scheduleLength-1)
   regTdmCounter2 := Mux(end, UInt(0), regTdmCounter2 + UInt(1))
