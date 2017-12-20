@@ -1,5 +1,5 @@
 CC=gcc
 
 doit:
-	$(CC) onewaysim.c
+	$(CC) -pthread onewaysim.c
 	./a.out

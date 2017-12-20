@@ -15,6 +15,8 @@
 
 
 unsigned long alltxmem[4][1000];
+// \rasmus: is alrxmem the same size as txmem? 
+//          I could probably prefer to model the mem replicated at the core level 
 unsigned long allrxmem[4][1000];
 
 // void *core(void *vargp) {
