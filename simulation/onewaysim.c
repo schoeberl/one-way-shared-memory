@@ -20,12 +20,10 @@ unsigned long alltxmem[4][1000];
 // the thread function.
 unsigned long allrxmem[4][1000];
 
-// void *core(void *vargp) {
-// the following is wrong, but I'm too lazy to find  the right casting
-void *coredo(int *vargp)
+void *coredo(void *vargp)
 {
 
-  int id = (int) *vargp;
+  int id = *((int *) vargp);
   unsigned long *txmem;
   txmem = alltxmem[id];
   unsigned long *rxmem;
