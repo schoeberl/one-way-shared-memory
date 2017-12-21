@@ -14,16 +14,18 @@
 // start with hard coded 4 cores for a quick start
 
 unsigned long alltxmem[4][1000];
-// \rasmus: is alrxmem the same size as txmem?
+// \rasmus: is alrxmem the same size as txmem? Martin: yes, sure
 //          I could probably prefer to model the mem replicated at the core level
+// Martin: Yes, you could do a struct including all stuff and pass it to
+// the thread function.
 unsigned long allrxmem[4][1000];
 
 // void *core(void *vargp) {
 // the following is wrong, but I'm too lazy to find  the right casting
-void *coredo(void *vargp)
+void *coredo(int *vargp)
 {
 
-  int id = (long)vargp;
+  int id = (int) *vargp;
   unsigned long *txmem;
   txmem = alltxmem[id];
   unsigned long *rxmem;
@@ -35,9 +37,10 @@ void *coredo(void *vargp)
   {
     printf("%d: %lu, ", id, allrxmem[id][0]);
   //"bug": it does not flush at it runs, only at the end
+  // Martin: it does it on my machine
     fflush(stdout);
     alltxmem[id][0] = id * 10 + id;
-    usleep(1);
+    usleep(100000);
   }
   //return NULL;
 }
@@ -45,17 +48,20 @@ void *coredo(void *vargp)
 int mainms()
 {
 
-  pthread_t tid[4];
-  //long id[4];
+  // Just to make it clear that those are accessed by threads
+  static pthread_t tid[4];
+  static int id[4];
+
   printf("Simulation starts\n");
-  for (long i = 0; i < 4; ++i)
+  for (int i = 0; i < 4; ++i)
   {
-    //id[i] = i;
-    int returncode = pthread_create(&tid[i], NULL, coredo, (void *)i); //&id[i]);
+    id[i] = i;
+    // (void *)i: Do not pass a pointer local variable that goes out
+    // of scope into a thread. The address may point to the i from the next
+    // loop when accessed by a thread.
+    int returncode = pthread_create(&tid[i], NULL, coredo, &id[i]);
   }
 
-  // we should use a shorter sleeping function like nanosleep()
-  usleep(1000);
   // main is simulating the data movement by the NIs through the NoC
   for (int i = 0; i < 10; ++i)
   {
@@ -65,8 +71,10 @@ int mainms()
     allrxmem[1][0] = alltxmem[3][0];
     allrxmem[2][0] = alltxmem[2][0];
     allrxmem[3][0] = alltxmem[1][0];
-    usleep(1);
+    usleep(100000);
     // or maybe better ues yield() to give
+    // TODO: find the buffer mapping from the real hardware for a more
+    // realistic setup
   }
 
   usleep(1000);
@@ -109,8 +117,9 @@ int mainms()
 #define MESH_COLS 2
 #define CORES (MESH_ROWS * MESH_COLS)
 // core configuration
-#define TX_MEM 1
-#define RX_MEM 1 * (CORES - 1) // 3
+#define BUFSIZE 16
+#define TX_MEM (BUFSIZE * (CORES-1))
+#define RX_MEM (BUFSIZE * (CORES-1))
 
 // transmission one-way-memory memory
 typedef struct TXMemory
