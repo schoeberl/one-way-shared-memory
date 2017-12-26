@@ -57,6 +57,9 @@ int mainms()
     // (void *)i: Do not pass a pointer local variable that goes out
     // of scope into a thread. The address may point to the i from the next
     // loop when accessed by a thread.
+    // rup: It was not a pointer local variable.
+    //      The value of the void pointer was cast as long on the first line in coredo
+    //      to give the thread id. 
     int returncode = pthread_create(&tid[i], NULL, coredo, &id[i]);
   }
 
