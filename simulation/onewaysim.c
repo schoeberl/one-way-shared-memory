@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 // start with hard coded 4 cores for a quick start
 
@@ -23,7 +24,7 @@ unsigned long allrxmem[4][1000];
 void *coredo(void *vargp)
 {
 
-  int id = *((int *) vargp);
+  int id = *((int *)vargp);
   unsigned long *txmem;
   txmem = alltxmem[id];
   unsigned long *rxmem;
@@ -34,8 +35,8 @@ void *coredo(void *vargp)
   for (int i = 0; i < 10; ++i)
   {
     printf("%d: %lu, ", id, allrxmem[id][0]);
-  //"bug": it does not flush at it runs, only at the end
-  // Martin: it does it on my machine
+    //"bug": it does not flush at it runs, only at the end
+    // Martin: it does it on my machine
     fflush(stdout);
     alltxmem[id][0] = id * 10 + id;
     usleep(100000);
@@ -59,7 +60,7 @@ int mainms()
     // loop when accessed by a thread.
     // rup: It was not a pointer local variable.
     //      The value of the void pointer was cast as long on the first line in coredo
-    //      to give the thread id. 
+    //      to give the thread id.
     int returncode = pthread_create(&tid[i], NULL, coredo, &id[i]);
   }
 
@@ -100,13 +101,13 @@ int mainms()
   return 0;
 }
 
-  ///////////////////////////////////////////////////////////////////////////////
-  //TODO: merge the code above and below
-  ///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//TODO: merge the code above and below
+///////////////////////////////////////////////////////////////////////////////
 
-  // Notes
-  // Structs are pointer
-  // Data, such as flits and arrays of unsigned longs are not pointers
+// Notes
+// Structs are pointer
+// Data, such as flits and arrays of unsigned longs are not pointers
 
 //#include <pthread.h>
 //#include <stdio.h>
@@ -118,9 +119,9 @@ int mainms()
 #define MESH_COLS 2
 #define CORES (MESH_ROWS * MESH_COLS)
 // core configuration
-#define BUFSIZE 16
-#define TX_MEM (BUFSIZE * (CORES-1))
-#define RX_MEM (BUFSIZE * (CORES-1))
+#define BUFSIZE 1 //16
+#define TX_MEM (BUFSIZE * (CORES - 1))
+#define RX_MEM (BUFSIZE * (CORES - 1))
 
 // transmission one-way-memory memory
 typedef struct TXMemory
@@ -134,12 +135,28 @@ typedef struct RXMemory
   unsigned long data[RX_MEM];
 } RXMemory;
 
+// route planning information on one link's routing status
+typedef struct Link_Routes
+{
+  // true if data is going out on this link
+  bool outgoing;
+  // true of data is going in on this link
+  bool incoming;
+} Link_Routes;
+
+// simulation structs
+
 typedef struct Link Link;
 typedef struct Router Router;
+
 typedef struct Link
 {
-  Router *r; // owner
-  Link *al;  // link to (another router) link
+  // owner
+  Router *r;
+  // link to (another router) link
+  Link *al;
+  // route planning
+  Link_Routes lr;
 } Link;
 
 // network interface
@@ -148,6 +165,16 @@ typedef struct NetworkInterface
   Link *l; // local
 } NetworkInterface;
 
+// route planing information for one router's status
+typedef struct Router_Routes
+{
+  // set to the active link or NULL
+  Link activelink;
+  // set to true if 'regout' holds valid data
+  bool validflit;
+} Router_Routes;
+
+// router
 typedef struct Router
 {
   Link l;      // local
@@ -155,7 +182,10 @@ typedef struct Router
   Link e;      // east
   Link s;      // south
   Link w;      // west
+  Link none;   // no active link
   flit regout; // pipelined with a 'flit' (see 'flit' define)
+  // route planning
+  Router_Routes rr;
 } Router;
 
 typedef struct Core
@@ -179,39 +209,90 @@ typedef struct NoC
 {
   Tile tile[MESH_ROWS][MESH_COLS];
 } NoC;
+// declare noc
+static NoC noc;
+
+// functions //
 
 // init the "network-on-chip" NoC
-void initnoc(NoC *nocp)
+void initnoc()
 {
   // noc tiles init
   for (int i = 0; i < MESH_ROWS; i++)
   {
     for (int j = 0; j < MESH_COLS; j++)
     {
-      nocp->tile[i][j].txmem.data[0] = i << 0x10 | j;       // "i,j" tx test data ...
-      nocp->tile[i][j].ni.l = &(nocp->tile[i][j].router.l); // connect ni and router
+      noc.tile[i][j].txmem.data[0] = i << 0x10 | j;     // "i,j" tx test data ...
+      noc.tile[i][j].ni.l = &(noc.tile[i][j].router.l); // connect ni and router
     }
   }
 }
 
-void initrouter(NoC *nocp)
+void initrouter()
 {
   // router links init
   for (int i = 0; i < MESH_ROWS; i++)
   {
     for (int j = 0; j < MESH_COLS; j++) //...
     {
-      nocp->tile[i][j].router.n.r = &(nocp->tile[i][j].router);
-      nocp->tile[i][j].router.e.r = &(nocp->tile[i][j].router);
-      nocp->tile[i][j].router.s.r = &(nocp->tile[i][j].router);
-      nocp->tile[i][j].router.w.r = &(nocp->tile[i][j].router);
-      nocp->tile[i][j].router.l.r = &(nocp->tile[i][j].router);
+      noc.tile[i][j].router.n.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.e.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.s.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.w.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.l.r = &(noc.tile[i][j].router);
       // torus property by connecting 'e' to 'w'
       int m = (i + 1 < MESH_ROWS - 1) ? i + 1 : 0;
-      nocp->tile[i][j].router.e.al = &(nocp->tile[m][j].router.w);
+      noc.tile[i][j].router.e.al = &(noc.tile[m][j].router.w);
       // torus property by connecting 'n' to 's'
       int n = (j + 1 < MESH_COLS - 1) ? j + 1 : 0;
-      nocp->tile[i][j].router.n.al = &(nocp->tile[i][n].router.s);
+      noc.tile[i][j].router.n.al = &(noc.tile[i][n].router.s);
+    }
+  }
+}
+
+// init findroutes
+void initrouteplanner()
+{
+  // router links init
+  for (int i = 0; i < MESH_ROWS; i++)
+  {
+    for (int j = 0; j < MESH_COLS; j++)
+    {
+      noc.tile[i][j].router.rr.activelink = noc.tile[i][j].router.none;
+      noc.tile[i][j].router.rr.validflit = false;
+      noc.tile[i][j].router.n.lr.incoming = false;
+      noc.tile[i][j].router.n.lr.outgoing = false;
+      noc.tile[i][j].router.e.lr.incoming = false;
+      noc.tile[i][j].router.e.lr.outgoing = false;
+      noc.tile[i][j].router.s.lr.incoming = false;
+      noc.tile[i][j].router.s.lr.outgoing = false;
+      noc.tile[i][j].router.w.lr.incoming = false;
+      noc.tile[i][j].router.w.lr.outgoing = false;
+      noc.tile[i][j].router.l.lr.incoming = false;
+      noc.tile[i][j].router.l.lr.outgoing = false;
+    }
+  }
+}
+
+// find valid routes
+void findroutes()
+{
+  // shortest path first
+  for (int i = 0; i < MESH_ROWS; i++)
+  {
+    for (int j = 0; j < MESH_COLS; j++) //...
+    {
+      noc.tile[i][j].router.n.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.e.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.s.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.w.r = &(noc.tile[i][j].router);
+      noc.tile[i][j].router.l.r = &(noc.tile[i][j].router);
+      // torus property by connecting 'e' to 'w'
+      int m = (i + 1 < MESH_ROWS - 1) ? i + 1 : 0;
+      noc.tile[i][j].router.e.al = &(noc.tile[m][j].router.w);
+      // torus property by connecting 'n' to 's'
+      int n = (j + 1 < MESH_COLS - 1) ? j + 1 : 0;
+      noc.tile[i][j].router.n.al = &(noc.tile[i][n].router.s);
     }
   }
 }
@@ -223,12 +304,11 @@ void *corerun(void *coreid)
   pthread_exit(NULL);
 }
 
-static NoC noc;
 int mainrup()
 {
 
-  initnoc(&noc);
-  initrouter(&noc);
+  initnoc();
+  initrouter();
 
   for (int i = 0; i < MESH_ROWS; i++)
   {
@@ -249,17 +329,17 @@ int mainrup()
   //  el
   //...got this far
 
-  pthread_t threads[CORES];
-  for (long i = 0; i < CORES; i++)
-  {
-    printf("Init nocsim: core %ld created ...\n", i);
-    int returncode = pthread_create(&threads[i], NULL, corerun, (void *)i);
-    if (returncode)
-    {
-      printf("Error %d ... \n", returncode);
-      exit(-1);
-    }
-  }
+  // pthread_t threads[CORES];
+  // for (long i = 0; i < CORES; i++)
+  // {
+  //   printf("Init nocsim: core %ld created ...\n", i);
+  //   int returncode = pthread_create(&threads[i], NULL, corerun, (void *)i);
+  //   if (returncode)
+  //   {
+  //     printf("Error %d ... \n", returncode);
+  //     exit(-1);
+  //   }
+  // }
 
   //pthread_exit(NULL);
 }
@@ -267,13 +347,16 @@ int mainrup()
 // first merge by retaining both versions fully
 int main(int argc, char *argv[])
 {
-  printf("Calling 'nocsim' mainrup(): *****************************************************\n");
-  mainrup();
-  printf("\n");
+  printf("*********************************************************************************\n");
   printf("Calling 'onewaysim' mainms(): ***************************************************\n");
-// todo: this code stalls every other time on my ubuntu approx every 2nd run 
-//       perhaps because we use the same thread ids?
+  printf("*********************************************************************************\n");
   mainms();
+  printf("\n");
+
+  printf("*********************************************************************************\n");
+  printf("Calling 'nocsim' mainrup(): *****************************************************\n");
+  printf("*********************************************************************************\n");
+  mainrup();
   printf("\n");
 }
 
