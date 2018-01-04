@@ -1,9 +1,14 @@
 # One-Way Shared Memory
 
-This repository contains the source code of the architecture for following paper,
-submitted to DATE 2018:
+This repository contains the source code of the architecture for following paper:
 
-*Martin Schoeberl, One-Way Shared Memory, under submission*
+*Martin Schoeberl, One-Way Shared Memory, accepted for publication, DATE 2018*
+
+We will continue to work on the project. Therefore, to reproduce the exact
+same results as presented in the DATE paper, use following tag:
+
+03cacf682c01b35ceab72003488fadc7ae731cc2
+
 
 ## Abstract
 
