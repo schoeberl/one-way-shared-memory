@@ -15,10 +15,6 @@
 // start with hard coded 4 cores for a quick start
 
 unsigned long alltxmem[4][1000];
-// \rasmus: is alrxmem the same size as txmem? Martin: yes, sure
-//          I could probably prefer to model the mem replicated at the core level
-// Martin: Yes, you could do a struct including all stuff and pass it to
-// the thread function.
 unsigned long allrxmem[4][1000];
 
 void *coredo(void *vargp)
@@ -115,102 +111,23 @@ int mainms()
 #define flit unsigned long
 
 // noc configuration
-#define MESH_ROWS 2
-#define MESH_COLS 2
-#define CORES (MESH_ROWS * MESH_COLS)
-// core configuration
-#define BUFSIZE 1 //16
-#define TX_MEM (BUFSIZE * (CORES - 1))
-#define RX_MEM (BUFSIZE * (CORES - 1))
-
-// transmission one-way-memory memory
-typedef struct TXMemory
-{
-  unsigned long data[TX_MEM];
-} TXMemory;
-
-// receiver one-way-memory memory
-typedef struct RXMemory
-{
-  unsigned long data[RX_MEM];
-} RXMemory;
-
-// route planning information on one link's routing status
-typedef struct Link_Routes
-{
-  // true if data is going out on this link
-  bool outgoing;
-  // true of data is going in on this link
-  bool incoming;
-} Link_Routes;
+#define CORES 4
+// one core configuration
+#define MEMBUF 4 // 32-bit words
+#define TXRXMEMSIZE (MEMBUF * (CORES - 1))
 
 // simulation structs
-
-typedef struct Link Link;
-typedef struct Router Router;
-
-typedef struct Link
-{
-  // owner
-  Router *r;
-  // link to (another router) link
-  Link *al;
-  // route planning
-  Link_Routes lr;
-} Link;
-
-// network interface
-typedef struct NetworkInterface
-{
-  Link *l; // local
-} NetworkInterface;
-
-// route planing information for one router's status
-typedef struct Router_Routes
-{
-  // set to the active link or NULL
-  Link activelink;
-  // set to true if 'regout' holds valid data
-  bool validflit;
-} Router_Routes;
-
-// router
-typedef struct Router
-{
-  Link l;      // local
-  Link n;      // north
-  Link e;      // east
-  Link s;      // south
-  Link w;      // west
-  Link none;   // no active link
-  flit regout; // pipelined with a 'flit' (see 'flit' define)
-  // route planning
-  Router_Routes rr;
-} Router;
 
 typedef struct Core
 {
   // some function to be run by the core
   //int (*run)(int)
+  unsigned long tx[TXRXMEMSIZE];
+  unsigned long rx[TXRXMEMSIZE];
 } Core;
 
-//
-typedef struct Tile
-{
-  Core core;
-  TXMemory txmem;
-  RXMemory rxmem;
-  NetworkInterface ni;
-  Router router;
-} Tile;
-
-// The network-on-chip / network-of-cores structure
-typedef struct NoC
-{
-  Tile tile[MESH_ROWS][MESH_COLS];
-} NoC;
-// declare noc
-static NoC noc;
+// declare noc consisting of cores
+static Core core[CORES];
 
 // functions //
 
@@ -218,82 +135,9 @@ static NoC noc;
 void initnoc()
 {
   // noc tiles init
-  for (int i = 0; i < MESH_ROWS; i++)
+  for (int i = 0; i < CORES; i++)
   {
-    for (int j = 0; j < MESH_COLS; j++)
-    {
-      noc.tile[i][j].txmem.data[0] = i << 0x10 | j;     // "i,j" tx test data ...
-      noc.tile[i][j].ni.l = &(noc.tile[i][j].router.l); // connect ni and router
-    }
-  }
-}
-
-void initrouter()
-{
-  // router links init
-  for (int i = 0; i < MESH_ROWS; i++)
-  {
-    for (int j = 0; j < MESH_COLS; j++) //...
-    {
-      noc.tile[i][j].router.n.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.e.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.s.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.w.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.l.r = &(noc.tile[i][j].router);
-      // torus property by connecting 'e' to 'w'
-      int m = (i + 1 < MESH_ROWS - 1) ? i + 1 : 0;
-      noc.tile[i][j].router.e.al = &(noc.tile[m][j].router.w);
-      // torus property by connecting 'n' to 's'
-      int n = (j + 1 < MESH_COLS - 1) ? j + 1 : 0;
-      noc.tile[i][j].router.n.al = &(noc.tile[i][n].router.s);
-    }
-  }
-}
-
-// init findroutes
-void initrouteplanner()
-{
-  // router links init
-  for (int i = 0; i < MESH_ROWS; i++)
-  {
-    for (int j = 0; j < MESH_COLS; j++)
-    {
-      noc.tile[i][j].router.rr.activelink = noc.tile[i][j].router.none;
-      noc.tile[i][j].router.rr.validflit = false;
-      noc.tile[i][j].router.n.lr.incoming = false;
-      noc.tile[i][j].router.n.lr.outgoing = false;
-      noc.tile[i][j].router.e.lr.incoming = false;
-      noc.tile[i][j].router.e.lr.outgoing = false;
-      noc.tile[i][j].router.s.lr.incoming = false;
-      noc.tile[i][j].router.s.lr.outgoing = false;
-      noc.tile[i][j].router.w.lr.incoming = false;
-      noc.tile[i][j].router.w.lr.outgoing = false;
-      noc.tile[i][j].router.l.lr.incoming = false;
-      noc.tile[i][j].router.l.lr.outgoing = false;
-    }
-  }
-}
-
-// find valid routes
-void findroutes()
-{
-  // shortest path first
-  for (int i = 0; i < MESH_ROWS; i++)
-  {
-    for (int j = 0; j < MESH_COLS; j++) //...
-    {
-      noc.tile[i][j].router.n.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.e.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.s.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.w.r = &(noc.tile[i][j].router);
-      noc.tile[i][j].router.l.r = &(noc.tile[i][j].router);
-      // torus property by connecting 'e' to 'w'
-      int m = (i + 1 < MESH_ROWS - 1) ? i + 1 : 0;
-      noc.tile[i][j].router.e.al = &(noc.tile[m][j].router.w);
-      // torus property by connecting 'n' to 's'
-      int n = (j + 1 < MESH_COLS - 1) ? j + 1 : 0;
-      noc.tile[i][j].router.n.al = &(noc.tile[i][n].router.s);
-    }
+      core[i].tx[0] = i;     // "i,j" tx test data ...
   }
 }
 
@@ -304,30 +148,24 @@ void *corerun(void *coreid)
   pthread_exit(NULL);
 }
 
+
+
+
+
+// end route planner
+///////////////////////////////////////////////////////////////////////////////
+
 int mainrup()
 {
 
   initnoc();
-  initrouter();
 
-  for (int i = 0; i < MESH_ROWS; i++)
+  for (int i = 0; i < CORES; i++)
   {
-    for (int j = 0; j < MESH_COLS; j++) //...
-    {
-      printf("router[%d][%d] rx data: 0x%08lx\n", i, j, noc.tile[i][j].txmem.data[0]);
-    }
+    printf("core[%d] tx data: 0x%08lx\n", i, core[i].tx[0]);
   }
 
-  //routing test
-  //e
-  noc.tile[0][0].router.e.al->r->regout = 2; // .tile[i][j].txmem[0]
-  printf("\nrouter[0][1].regout: 0x%08lx\n", noc.tile[0][0].router.regout);
 
-  //routing test
-  //nel
-  // nl
-  //  el
-  //...got this far
 
   // pthread_t threads[CORES];
   // for (long i = 0; i < CORES; i++)
