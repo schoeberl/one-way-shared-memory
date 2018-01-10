@@ -148,6 +148,30 @@ typedef struct Core
 static Core core[CORES];
 
 // init patmos (simulated) internals 
+static bool runnoc;
+
+// the NoC (same for all comm. patterns)
+void *nocthreadfunc(void *coreid)
+{
+  printf("NoC here ...\n");
+  for(int i=0; i<CORES; i++){ // tx
+    sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
+    for(int j=0; j<MEMBUF; j++){
+      sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+      for(int k=0; k<CORES; k++){ //rx
+        core[k].rx[j] = core[i].tx[j];  
+      }
+      TDMROUND_REGISTER++;
+      usleep(100); //much slower than the cores on purpose, so they can poll
+    }
+    TDMROUND_REGISTER = 0;
+    TDMCYCLE_REGISTER++;
+    usleep(100);
+  }
+  // stop the cores
+  runnoc = false;
+}
+
 void initpatmos()
 {
   TDMROUND_REGISTER = 0;
@@ -159,41 +183,29 @@ void initpatmos()
       core[i].rx[j] = 0;
     }
   }
+  
+  //start noc test control
+  runnoc = true;
+  pthread_t nocthread;
+  int returncode = pthread_create(&nocthread, NULL, nocthreadfunc, NULL);
+  if (returncode)
+  {
+    printf("Error %d ... \n", returncode);
+    exit(-1);
+  }
+  sync_printf("runtesttbs(): noc thread created ...\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERNS///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-//a noc test controller will drive the patmost registers and inject
+//a noc test controller ('nocthread') will drive the patmost registers and inject
 //  test data for the cores to use
 ///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
-
-static bool runtbs;
-
-// the NoC
-void *nocthreadtbs(void *coreid)
-{
-  printf("NoC here ...\n");
-  for(int i=0; i<CORES; i++){ // tx
-    sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
-    for(int j=0; j<MEMBUF; j++){
-      sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
-      for(int k=0; k<CORES; k++){ //rx
-        core[k].rx[j] = core[i].tx[j];  
-      }
-      TDMROUND_REGISTER++;
-      usleep(1000); // 10 ms
-    }
-    TDMROUND_REGISTER = 0;
-    TDMCYCLE_REGISTER++;
-  }
-  // stop the cores
-  runtbs = false;
-}
 
 // the cores
 void *corethreadtbs(void *coreid)
@@ -202,7 +214,7 @@ void *corethreadtbs(void *coreid)
   int step = 0;
   unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
-  while(runtbs){
+  while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are detected
     if(tdmcycle != TDMCYCLE_REGISTER){
@@ -219,17 +231,6 @@ void *corethreadtbs(void *coreid)
 
 void runtesttbs(){
   sync_printf("start: runtesttbs() ...\n");
-  runtbs = true;
-  //start noc test control
-  pthread_t nocthread;
-  int returncode = pthread_create(&nocthread, NULL, nocthreadtbs, NULL);
-  if (returncode)
-  {
-    printf("Error %d ... \n", returncode);
-    exit(-1);
-  }
-  sync_printf("runtesttbs(): noc thread created ...\n");
-  
   //start cores 
   pthread_t corethreads[CORES];
   for (long i = 0; i < CORES; i++)
@@ -248,15 +249,13 @@ void runtesttbs(){
   {
     pthread_join(corethreads[i], NULL);
   }
-  pthread_join(nocthread, NULL);
+  //pthread_join(nocthread, NULL);
   sync_printf("done: runtesttbs() ...\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Handshaking Protocol
 ///////////////////////////////////////////////////////////////////////////////
-
-static bool runhsp;
 
 // a struct for handshaking
 typedef struct handshakemsg_t{
@@ -268,29 +267,6 @@ typedef struct handshakemsg_t{
   unsigned long data1;
   unsigned long data2;
 } handshakemsg_t;
-
-
-// the NoC
-void *nocthreadhsp(void *coreid)
-{
-  printf("NoC here ...\n");
-  for(int i=0; i<CORES; i++){ // tx
-    sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
-    for(int j=0; j<MEMBUF; j++){
-      sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
-      for(int k=0; k<CORES; k++){ //rx
-        core[k].rx[j] = core[i].tx[j];  
-      }
-      TDMROUND_REGISTER++;
-      usleep(1000); //much slower than the cores on purpose, so they can poll
-    }
-    TDMROUND_REGISTER = 0;
-    TDMCYCLE_REGISTER++;
-    usleep(1000);
-  }
-  // stop the cores
-  runhsp = false;
-}
 
 // the cores
 void *corethreadhsp(void *coreid)
@@ -308,7 +284,7 @@ void *corethreadhsp(void *coreid)
   txmsg.reqid = 1; // want to get message 1 from another core (and no more)
   memcpy(&core[cid].tx[0], &txmsg, sizeof(txmsg));
 
-  while(runhsp){
+  while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are detected
     if(tdmcycle != TDMCYCLE_REGISTER){
@@ -316,8 +292,12 @@ void *corethreadhsp(void *coreid)
       tdmcycle = TDMCYCLE_REGISTER;
     }
     if(tdmround != TDMROUND_REGISTER){
-      //rx functionality
+      // copy what we got
       memcpy(&rxmsg, core[cid].rx, sizeof(rxmsg));
+      // first we will see the request for message id 1 arriving at each core
+      // then we will see that each core responds with message 1 and some data
+      // it keeps repeating the same message until it gets another request for a new
+      // message id
       sync_printf("Core #%ld: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
       // is it a request?
       if (rxmsg.reqid > 0 && rxmsg.respid == 0){
@@ -338,17 +318,7 @@ void *corethreadhsp(void *coreid)
 
 void runhandshakeprotocoltest(){
   sync_printf("start: runtesthsp() ...\n");
-  runhsp = true;
-  //start noc test control
-  pthread_t nocthread;
-  int returncode = pthread_create(&nocthread, NULL, nocthreadhsp, NULL);
-  if (returncode)
-  {
-    printf("Error %d ... \n", returncode);
-    exit(-1);
-  }
-  sync_printf("runtesthsp(): noc thread created ...\n");
-  
+
   //start cores 
   pthread_t corethreads[CORES];
   for (long i = 0; i < CORES; i++)
@@ -367,7 +337,7 @@ void runhandshakeprotocoltest(){
   {
     pthread_join(corethreads[i], NULL);
   }
-  pthread_join(nocthread, NULL);
+  //pthread_join(nocthread, NULL);
   sync_printf("done: runtesthsp() ...\n");
 }
 
@@ -375,11 +345,96 @@ void runhandshakeprotocoltest(){
 //COMMUNICATION PATTERN: Exchange of state
 ///////////////////////////////////////////////////////////////////////////////
 
-void runexchangestatetest(){
-  //start noc test control
-  
-  //start cores
+// a struct for handshaking
+typedef struct es_msg_t{
+  // if non-zero then valid msg
+  // if respid = 0 then it is a request
+  unsigned long reqid; 
+  // if non-zero then it is a response
+  unsigned long respid;
+  //sensor id
+  unsigned long sensorid;
+  //sensor value
+  unsigned long sensorval;
+} es_msg_t;
+
+// the cores
+void *corethreades(void *coreid)
+{
+  long cid = (long)coreid;
+  int step = 0;
+  unsigned long tdmcycle = 0xFFFFFFFF;
+  unsigned long tdmround = 0xFFFFFFFF;
+  handshakemsg_t txmsg;
+  memset(&txmsg, 0, sizeof(txmsg));
+  handshakemsg_t rxmsg;
+  memset(&rxmsg, 0, sizeof(rxmsg));
+    
+  //kickstart with sending a request to each of the other cores
+  txmsg.reqid = 1; // want to get message 1 from another core (and no more)
+  memcpy(&core[cid].tx[0], &txmsg, sizeof(txmsg));
+
+  while(runnoc){
+    // the cores are aware of the global cycle times for time-based-synchronization
+    // the cores print their output after the cycle count changes are detected
+    if(tdmcycle != TDMCYCLE_REGISTER){
+      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmcycle = TDMCYCLE_REGISTER;
+    }
+    if(tdmround != TDMROUND_REGISTER){
+      // copy what we got
+      memcpy(&rxmsg, core[cid].rx, sizeof(rxmsg));
+
+      // see handshaking protocol (which this is built upon)
+
+      // is it a request?
+      if (rxmsg.reqid > 0 && rxmsg.respid == 0){
+        sync_printf("Core #%ld sensor request: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
+        memset(&txmsg, 0, sizeof(txmsg));
+        txmsg.reqid = rxmsg.reqid;
+        txmsg.respid = rxmsg.reqid;
+        txmsg.data1 = cid;
+        txmsg.data2 = rxmsg.reqid + rxmsg.reqid + cid; // not real
+        // schedule for sending (tx)
+        memcpy(core[cid].tx, &txmsg, sizeof(txmsg));
+      }
+
+      // is it a response?
+      if (rxmsg.reqid > 0 && rxmsg.respid == rxmsg.reqid){
+        sync_printf("Core #%ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.sensorid=%lu,\n  rxmsg.sensorval=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
+      }
+      
+      tdmround = TDMROUND_REGISTER;
+    }
+    step++;
+  }
 }
+
+void runexchangestatetest(){
+  sync_printf("start: runtesthsp() ...\n");
+  
+  //start cores 
+  pthread_t corethreads[CORES];
+  for (long i = 0; i < CORES; i++)
+  {
+    int returncode = pthread_create(&corethreads[i], NULL, corethreades, (void *)i);
+    if (returncode)
+    {
+      sync_printf("Error %d ... \n", returncode);
+      exit(-1);
+    }
+    sync_printf("runtesthsp(): core %ld created ...\n", i);
+  }
+
+  // wait
+  for (int i = 0; i < CORES; i++)
+  {
+    pthread_join(corethreads[i], NULL);
+  }
+  //pthread_join(nocthread, NULL);
+  sync_printf("done: runtesthsp() ...\n");
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Streaming Double Buffer
@@ -400,8 +455,8 @@ int main2()
 
   // call one of these tests (and create your own as needed)
   //runtesttbs(); // time-based synchronization
-  runhandshakeprotocoltest();
-  //runexchangestatetest();
+  //runhandshakeprotocoltest();
+  runexchangestatetest();
   //runstreamingdoublebuffertest();
 }
 
