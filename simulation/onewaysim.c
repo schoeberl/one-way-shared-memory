@@ -411,7 +411,7 @@ void *corethreades(void *coreid)
 }
 
 void runexchangestatetest(){
-  sync_printf("start: runtesthsp() ...\n");
+  sync_printf("start: runexchangestatetest() ...\n");
   
   //start cores 
   pthread_t corethreads[CORES];
@@ -423,7 +423,7 @@ void runexchangestatetest(){
       sync_printf("Error %d ... \n", returncode);
       exit(-1);
     }
-    sync_printf("runtesthsp(): core %ld created ...\n", i);
+    sync_printf("runexchangestatetest(): core %ld created ...\n", i);
   }
 
   // wait
@@ -432,20 +432,100 @@ void runexchangestatetest(){
     pthread_join(corethreads[i], NULL);
   }
   //pthread_join(nocthread, NULL);
-  sync_printf("done: runtesthsp() ...\n");
+  sync_printf("done: runexchangestatetest() ...\n");
 }
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Streaming Double Buffer
+//COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
 ///////////////////////////////////////////////////////////////////////////////
 
+// a struct for one buffer
+typedef struct buffer_t{
+  unsigned long data[MEMBUF]; 
+} buffer_t;
+
+// the cores
+void *corethreadsdb(void *coreid)
+{
+  long cid = (long)coreid;
+  int step = 0;
+  unsigned long tdmcycle = 0xFFFFFFFF;
+  unsigned long tdmround = 0xFFFFFFFF;
+  buffer_t buffer_in_a;
+  buffer_t buffer_in_b;
+  buffer_t* active_buffer_in = &buffer_in_a;
+  bool a_in_active = true;
+  memset(&buffer_in_a, 0, sizeof(buffer_in_a));
+  memset(&buffer_in_b, 0, sizeof(buffer_in_b));
+
+  while(runnoc){
+    // the cores are aware of the global cycle times for time-based-synchronization
+    // the cores print their output after the cycle count changes are detected
+    if(tdmcycle != TDMCYCLE_REGISTER){
+      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmcycle = TDMCYCLE_REGISTER;
+    }
+    if(tdmround != TDMROUND_REGISTER){
+      //print the active buffer to see what is in it
+      sync_printf("Core #%ld active buffer: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  active_buffer_in->data[0]=%lu,\n  active_buffer_in->data[1]=%lu,\n  active_buffer_in->data[2]=%lu,\n  active_buffer_in->data[3]=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, active_buffer_in->data[0], active_buffer_in->data[1], active_buffer_in->data[2], active_buffer_in->data[3]);  
+
+      // copy what we got into the passive buffer
+      if(a_in_active)     
+        memcpy(&buffer_in_b, core[cid].rx, sizeof(buffer_t));
+      else 
+        memcpy(&buffer_in_a, core[cid].rx, sizeof(buffer_t));
+
+      if(a_in_active){
+        active_buffer_in = &buffer_in_b;
+        a_in_active = false;
+      } else {
+        active_buffer_in = &buffer_in_b;
+        a_in_active = true;
+      }    
+
+      // tx new data for other buffers at another core
+      // just step data, which is only related to thread scheduling (artificial data)
+      core[cid].tx[0] = step;
+      core[cid].tx[1] = step + 1;
+      core[cid].tx[2] = step + 2;
+      core[cid].tx[3] = step + 3;
+            
+      tdmround = TDMROUND_REGISTER;
+    }
+    step++;
+  }
+}
 
 void runstreamingdoublebuffertest(){
-  //start noc test control
+  sync_printf("start: runstreamingdoublebuffertest() ...\n");
   
   //start cores 
+  pthread_t corethreads[CORES];
+  for (long i = 0; i < CORES; i++)
+  {
+    int returncode = pthread_create(&corethreads[i], NULL, corethreadsdb, (void *)i);
+    if (returncode)
+    {
+      sync_printf("Error %d ... \n", returncode);
+      exit(-1);
+    }
+    sync_printf("runstreamingdoublebuffertest(): core %ld created ...\n", i);
+  }
+
+  // wait
+  for (int i = 0; i < CORES; i++)
+  {
+    pthread_join(corethreads[i], NULL);
+  }
+  //pthread_join(nocthread, NULL);
+  sync_printf("done: runstreamingdoublebuffertest() ...\n");
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//MAIN2
+///////////////////////////////////////////////////////////////////////////////
+
 
 // main2
 int main2()
@@ -456,8 +536,8 @@ int main2()
   // call one of these tests (and create your own as needed)
   //runtesttbs(); // time-based synchronization
   //runhandshakeprotocoltest();
-  runexchangestatetest();
-  //runstreamingdoublebuffertest();
+  //runexchangestatetest();
+  runstreamingdoublebuffertest();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
