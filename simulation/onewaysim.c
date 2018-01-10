@@ -11,6 +11,21 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdarg.h>
+
+//print stuff
+static pthread_mutex_t printf_mutex;
+int sync_printf(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    pthread_mutex_lock(&printf_mutex);
+    vprintf(format, args);
+    pthread_mutex_unlock(&printf_mutex);
+
+    va_end(args);
+}
 
 // start with hard coded 4 cores for a quick start
 
@@ -33,9 +48,11 @@ void *coredo(void *vargp)
     printf("%d: %lu, ", id, allrxmem[id][0]);
     //"bug": it does not flush at it runs, only at the end
     // Martin: it does it on my machine
+    // rup: I think the threads are preempted a few times, so that is why I thought the 
+    // printf output was strange:-) it is intermixed
     fflush(stdout);
     alltxmem[id][0] = id * 10 + id;
-    usleep(100000);
+    usleep(10000);
   }
   //return NULL;
 }
@@ -47,7 +64,7 @@ int main1()
   static pthread_t tid[4];
   static int id[4];
 
-  printf("Simulation starts\n");
+  printf("\nmain1(): Simulation starts\n");
   for (int i = 0; i < 4; ++i)
   {
     id[i] = i;
@@ -101,16 +118,7 @@ int main1()
 //TODO: merge the code above and below
 ///////////////////////////////////////////////////////////////////////////////
 
-// Notes
-// Structs are pointer
-// Data, such as flits and arrays of unsigned longs are not pointers
-
-//#include <pthread.h>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#define flit unsigned long
-
-// noc configuration
+// NoC configuration
 #define CORES 4
 // one core configuration
 #define MEMBUF 4 // 32-bit words
@@ -125,8 +133,7 @@ PATMOS_REGISTER TDMROUND_REGISTER;
 // one memory block delivered (word for word) from all to all
 PATMOS_REGISTER TDMCYCLE_REGISTER;
 
-
-// simulation structs
+// shared common simulation structs
 
 typedef struct Core
 {
@@ -141,63 +148,108 @@ static Core core[CORES];
 
 // functions //
 
-// init the "network-on-chip" NoC
-void initnoc()
+// init patmos (simulated) internals 
+void initpatmos()
 {
-  // noc tiles init
-  for (int i = 0; i < CORES; i++)
-  {
-      core[i].tx[0] = i;     // "i,j" tx test data ...
-  }
+  TDMROUND_REGISTER = 0;
+  TDMCYCLE_REGISTER = 0;
 }
 
-void *corerun(void *coreid)
+
+
+///////////////////////////////////////////////////////////////////////////////
+//COMMUNICATION PATTERNS///////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//a noc test controller will drive the patmost registers and inject
+//  test data for the cores to use
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
+//COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
+///////////////////////////////////////////////////////////////////////////////
+
+static bool runtbs;
+
+// the NoC
+void *nocthreadtbs(void *coreid)
+{
+  printf("NoC here ...\n");
+  for(int i=0; i<CORES; i++){ // tx
+    sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
+    for(int j=0; j<MEMBUF; j++){
+      sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+      for(int k=0; k<CORES; k++){ //rx
+        core[k].rx[j] = core[i].tx[j];  
+      }
+      TDMROUND_REGISTER++;
+      usleep(1000); // 10 ms
+    }
+    TDMROUND_REGISTER = 0;
+    TDMCYCLE_REGISTER++;
+  }
+  // stop the cores
+  runtbs = false;
+}
+
+// the cores
+void *corethreadtbs(void *coreid)
 {
   long cid = (long)coreid;
-  printf("NoC: core #%ld here ...\n", cid);
-  pthread_exit(NULL);
+  int step = 0;
+  unsigned long tdmcycle = 0xFFFFFFFF;
+  unsigned long tdmround = 0xFFFFFFFF;
+  while(runtbs){
+    // the cores are aware of the global cycle times for time-based-synchronization
+    // the cores print their output after the cycle count changes are detected
+    if(tdmcycle != TDMCYCLE_REGISTER){
+      sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmcycle = TDMCYCLE_REGISTER;
+    }
+    if(tdmround != TDMROUND_REGISTER){
+      sync_printf("Core #%ld: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmround = TDMROUND_REGISTER;
+    }
+    step++;
+  }
 }
 
-int main2()
-{
-
-  initnoc();
-
-  for (int i = 0; i < CORES; i++)
+void runtesttbs(){
+  sync_printf("start: runtesttbs() ...\n");
+  runtbs = true;
+  //start noc test control
+  pthread_t nocthread;
+  int returncode = pthread_create(&nocthread, NULL, nocthreadtbs, NULL);
+  if (returncode)
   {
-    printf("core[%d] tx data: 0x%08lx\n", i, core[i].tx[0]);
+    printf("Error %d ... \n", returncode);
+    exit(-1);
+  }
+  sync_printf("runtesttbs(): noc thread created ...\n");
+  
+  //start cores 
+  pthread_t corethreads[CORES];
+  for (long i = 0; i < CORES; i++)
+  {
+    int returncode = pthread_create(&corethreads[i], NULL, corethreadtbs, (void *)i);
+    if (returncode)
+    {
+      sync_printf("Error %d ... \n", returncode);
+      exit(-1);
+    }
+    sync_printf("runtesttbs(): core %ld created ...\n", i);
   }
 
-
-
-  // pthread_t threads[CORES];
-  // for (long i = 0; i < CORES; i++)
-  // {
-  //   printf("Init nocsim: core %ld created ...\n", i);
-  //   int returncode = pthread_create(&threads[i], NULL, corerun, (void *)i);
-  //   if (returncode)
-  //   {
-  //     printf("Error %d ... \n", returncode);
-  //     exit(-1);
-  //   }
-  // }
-
-  //pthread_exit(NULL);
+  // wait
+  for (int i = 0; i < CORES; i++)
+  {
+    pthread_join(corethreads[i], NULL);
+  }
+  pthread_join(nocthread, NULL);
+  sync_printf("done: runtesttbs() ...\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Time-Based Synchronization////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-void runtimebasedsynchronizationtest(){
-  //start noc test control
-
-  //start cores 
-
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Handshaking Protocol//////////////////////////////////
+//COMMUNICATION PATTERN: Handshaking Protocol
 ///////////////////////////////////////////////////////////////////////////////
 
 void runhandshakeprotocoltest(){
@@ -207,7 +259,7 @@ void runhandshakeprotocoltest(){
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Exchange of state/////////////////////////////////////
+//COMMUNICATION PATTERN: Exchange of state
 ///////////////////////////////////////////////////////////////////////////////
 
 void runexchangestatetest(){
@@ -217,7 +269,7 @@ void runexchangestatetest(){
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Streaming Double Buffer///////////////////////////////
+//COMMUNICATION PATTERN: Streaming Double Buffer
 ///////////////////////////////////////////////////////////////////////////////
 
 
@@ -227,27 +279,33 @@ void runstreamingdoublebuffertest(){
   //start cores 
 }
 
+// main2
+int main2()
+{
+  // always called
+  initpatmos();
 
+  // call one of these tests (and create your own as needed)
+  runtesttbs(); // time-based synchronization
+  //runhandshakeprotocoltest();
+  //runexchangestatetest();
+  //runstreamingdoublebuffertest();
+}
 
+///////////////////////////////////////////////////////////////////////////////
+//shared main
+///////////////////////////////////////////////////////////////////////////////
 
-
-
-
-
-
-
-// first merge by retaining both versions fully
 int main(int argc, char *argv[])
 {
-  printf("*********************************************************************************\n");
-  printf("Calling 'onewaysim' main1(): ***************************************************\n");
-  printf("*********************************************************************************\n");
-  main1();
-  printf("\n");
+  // synchronized printf 
+  pthread_mutex_init(&printf_mutex, NULL);
 
-  printf("*********************************************************************************\n");
-  printf("Calling 'nocsim' main2(): *****************************************************\n");
-  printf("*********************************************************************************\n");
+  printf("\n");
+  printf("*******************************************************************************\n");
+  printf("Calling 'onewaysim' main(): ***************************************************\n");
+  printf("*******************************************************************************\n");
+  main1();
   main2();
   printf("\n");
 }
