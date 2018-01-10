@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <string.h>
 
 //print stuff
 static pthread_mutex_t printf_mutex;
@@ -146,16 +147,19 @@ typedef struct Core
 // declare noc consisting of cores
 static Core core[CORES];
 
-// functions //
-
 // init patmos (simulated) internals 
 void initpatmos()
 {
   TDMROUND_REGISTER = 0;
   TDMCYCLE_REGISTER = 0;
+  // zero tx and rx
+  for(int i=0; i<CORES; i++){ // tx
+    for(int j=0; j<MEMBUF; j++){
+      core[i].tx[j] = 0;
+      core[i].rx[j] = 0;
+    }
+  }
 }
-
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERNS///////////////////////////////////////////////////////
@@ -252,10 +256,119 @@ void runtesttbs(){
 //COMMUNICATION PATTERN: Handshaking Protocol
 ///////////////////////////////////////////////////////////////////////////////
 
+static bool runhsp;
+
+// a struct for handshaking
+typedef struct handshakemsg_t{
+  // if non-zero then valid msg
+  // if respid = 0 then it is a request
+  unsigned long reqid; 
+  // if non-zero then it is a response
+  unsigned long respid;
+  unsigned long data1;
+  unsigned long data2;
+} handshakemsg_t;
+
+
+// the NoC
+void *nocthreadhsp(void *coreid)
+{
+  printf("NoC here ...\n");
+  for(int i=0; i<CORES; i++){ // tx
+    sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
+    for(int j=0; j<MEMBUF; j++){
+      sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+      for(int k=0; k<CORES; k++){ //rx
+        core[k].rx[j] = core[i].tx[j];  
+      }
+      TDMROUND_REGISTER++;
+      usleep(1000); //much slower than the cores on purpose, so they can poll
+    }
+    TDMROUND_REGISTER = 0;
+    TDMCYCLE_REGISTER++;
+    usleep(1000);
+  }
+  // stop the cores
+  runhsp = false;
+}
+
+// the cores
+void *corethreadhsp(void *coreid)
+{
+  long cid = (long)coreid;
+  int step = 0;
+  unsigned long tdmcycle = 0xFFFFFFFF;
+  unsigned long tdmround = 0xFFFFFFFF;
+  handshakemsg_t txmsg;
+  memset(&txmsg, 0, sizeof(txmsg));
+  handshakemsg_t rxmsg;
+  memset(&rxmsg, 0, sizeof(rxmsg));
+    
+  //kickstart with sending a request to each of the other cores
+  txmsg.reqid = 1; // want to get message 1 from another core (and no more)
+  memcpy(&core[cid].tx[0], &txmsg, sizeof(txmsg));
+
+  while(runhsp){
+    // the cores are aware of the global cycle times for time-based-synchronization
+    // the cores print their output after the cycle count changes are detected
+    if(tdmcycle != TDMCYCLE_REGISTER){
+      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmcycle = TDMCYCLE_REGISTER;
+    }
+    if(tdmround != TDMROUND_REGISTER){
+      //rx functionality
+      memcpy(&rxmsg, core[cid].rx, sizeof(rxmsg));
+      sync_printf("Core #%ld: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
+      // is it a request?
+      if (rxmsg.reqid > 0 && rxmsg.respid == 0){
+        memset(&txmsg, 0, sizeof(txmsg));
+        txmsg.reqid = rxmsg.reqid;
+        txmsg.respid = rxmsg.reqid;
+        txmsg.data1 = step;
+        txmsg.data2 = cid;
+        // schedule for sending (tx)
+        memcpy(core[cid].tx, &txmsg, sizeof(txmsg));
+      }
+      
+      tdmround = TDMROUND_REGISTER;
+    }
+    step++;
+  }
+}
+
 void runhandshakeprotocoltest(){
+  sync_printf("start: runtesthsp() ...\n");
+  runhsp = true;
   //start noc test control
+  pthread_t nocthread;
+  int returncode = pthread_create(&nocthread, NULL, nocthreadhsp, NULL);
+  if (returncode)
+  {
+    printf("Error %d ... \n", returncode);
+    exit(-1);
+  }
+  sync_printf("runtesthsp(): noc thread created ...\n");
   
-  //start cores  
+  //start cores 
+  pthread_t corethreads[CORES];
+  for (long i = 0; i < CORES; i++)
+  {
+    int returncode = pthread_create(&corethreads[i], NULL, corethreadhsp, (void *)i);
+    if (returncode)
+    {
+      sync_printf("Error %d ... \n", returncode);
+      exit(-1);
+    }
+    sync_printf("runtesthsp(): core %ld created ...\n", i);
+  }
+
+  // wait
+  for (int i = 0; i < CORES; i++)
+  {
+    pthread_join(corethreads[i], NULL);
+  }
+  pthread_join(nocthread, NULL);
+  sync_printf("done: runtesthsp() ...\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -286,8 +399,8 @@ int main2()
   initpatmos();
 
   // call one of these tests (and create your own as needed)
-  runtesttbs(); // time-based synchronization
-  //runhandshakeprotocoltest();
+  //runtesttbs(); // time-based synchronization
+  runhandshakeprotocoltest();
   //runexchangestatetest();
   //runstreamingdoublebuffertest();
 }
@@ -305,7 +418,7 @@ int main(int argc, char *argv[])
   printf("*******************************************************************************\n");
   printf("Calling 'onewaysim' main(): ***************************************************\n");
   printf("*******************************************************************************\n");
-  main1();
+  //main1();
   main2();
   printf("\n");
 }
