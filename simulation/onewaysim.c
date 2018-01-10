@@ -40,7 +40,7 @@ void *coredo(void *vargp)
   //return NULL;
 }
 
-int mainms()
+int main1()
 {
 
   // Just to make it clear that those are accessed by threads
@@ -108,13 +108,23 @@ int mainms()
 //#include <pthread.h>
 //#include <stdio.h>
 //#include <stdlib.h>
-#define flit unsigned long
+//#define flit unsigned long
 
 // noc configuration
 #define CORES 4
 // one core configuration
 #define MEMBUF 4 // 32-bit words
 #define TXRXMEMSIZE (MEMBUF * (CORES - 1))
+
+// patmos hardware registers provided via Scala HDL
+typedef volatile unsigned long PATMOS_REGISTER;
+
+// defined patmos hardware registers (simulated)
+// one word delivered from all to all
+PATMOS_REGISTER TDMROUND_REGISTER; 
+// one memory block delivered (word for word) from all to all
+PATMOS_REGISTER TDMCYCLE_REGISTER;
+
 
 // simulation structs
 
@@ -148,14 +158,7 @@ void *corerun(void *coreid)
   pthread_exit(NULL);
 }
 
-
-
-
-
-// end route planner
-///////////////////////////////////////////////////////////////////////////////
-
-int mainrup()
+int main2()
 {
 
   initnoc();
@@ -182,39 +185,69 @@ int mainrup()
   //pthread_exit(NULL);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//COMMUNICATION PATTERN: Time-Based Synchronization////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void runtimebasedsynchronizationtest(){
+  //start noc test control
+
+  //start cores 
+
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//COMMUNICATION PATTERN: Handshaking Protocol//////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void runhandshakeprotocoltest(){
+  //start noc test control
+  
+  //start cores  
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//COMMUNICATION PATTERN: Exchange of state/////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void runexchangestatetest(){
+  //start noc test control
+  
+  //start cores
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//COMMUNICATION PATTERN: Streaming Double Buffer///////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+
+void runstreamingdoublebuffertest(){
+  //start noc test control
+  
+  //start cores 
+}
+
+
+
+
+
+
+
+
+
+
 // first merge by retaining both versions fully
 int main(int argc, char *argv[])
 {
   printf("*********************************************************************************\n");
-  printf("Calling 'onewaysim' mainms(): ***************************************************\n");
+  printf("Calling 'onewaysim' main1(): ***************************************************\n");
   printf("*********************************************************************************\n");
-  mainms();
+  main1();
   printf("\n");
 
   printf("*********************************************************************************\n");
-  printf("Calling 'nocsim' mainrup(): *****************************************************\n");
+  printf("Calling 'nocsim' main2(): *****************************************************\n");
   printf("*********************************************************************************\n");
-  mainrup();
+  main2();
   printf("\n");
 }
-
-// Temp notes for a little design thinking //
-// For a simulation harness, we can make a "nocsim" harness that models the main components in
-// C structs, but are not meant to be run on the target (patmos). It has structs like
-// one-way-mem-noc struct, router structs, links structs, ni struct, tx mem struct, rx mem struct,
-// core struct, node (consists of core, rx, tx, ni) struct, tile (consists of node, router,
-// and links) struct.
-// Clocking: It is perhaps best to think in cycles as each cycle is a mini-transaction. Milli-second
-// based clocking is not going to work. It is fairly easy to use this clocking "scheme" in a
-// multithreaded simulator as the (nice) mesochronous clock property makes it possible
-// to read the current clock cycle, but care has to be taken to remember that another
-// router is perhaps already shifted into the next clock cycle.
-// Ideas for hard simulations, hard calculations:
-//   1) Each core wants to read on each cycle (we must be able to *calculate* WCET here as the
-//        sum of routing, latency, TDM scheduling *and* local app code wcet (platin analysis of a
-//        given benchmark C code).
-//   2) Each core wants to to write on each cycle (same argument as above, we should be able to
-//        calculate it.
-
-// https://llvm.org/docs/CodingStandards.html
-// https://stackoverflow.com/questions/31082559/warning-passing-argument-1-of-pthread-join-makes-integer-from-pointer-without
