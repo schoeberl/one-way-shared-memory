@@ -1,5 +1,5 @@
 /*
-  A software simulation of the One-Way Shared Memeory
+  A software simulation of the One-Way Shared Memory
 
   Copyright: CBS, DTU
   Authors: Rasmus Ulslev Pedersen, Martin Schoeberl
@@ -75,6 +75,8 @@ int main1()
     // rup: It was not a pointer local variable.
     //      The value of the void pointer was cast as long on the first line in coredo
     //      to give the thread id.
+    // Ok, my comment was not exact. Don't want to be picky, but
+    // it was a pointer *to* a local variable, which should be avoided.
     int returncode = pthread_create(&tid[i], NULL, coredo, &id[i]);
   }
 
@@ -199,7 +201,7 @@ void initpatmos()
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERNS///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-//a noc test controller ('nocthread') will drive the patmost registers and inject
+//a noc test controller ('nocthread') will drive the Patmos registers and inject
 //  test data for the cores to use
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -543,6 +545,8 @@ int main2()
 ///////////////////////////////////////////////////////////////////////////////
 //shared main
 ///////////////////////////////////////////////////////////////////////////////
+// MS: yes, we are missing Java with the option on having more than one main entry
+// into a project :-(
 
 int main(int argc, char *argv[])
 {
