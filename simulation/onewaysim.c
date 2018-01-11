@@ -157,19 +157,21 @@ void *nocthreadfunc(void *coreid)
 {
   printf("NoC here ...\n");
   TDMROUND_REGISTER = 0;
-  for (int n=0; n<10; ++n) { //number of runs
-    sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
+  for (int n=0; n<10; n++) { //number of runs
+    TDMCYCLE_REGISTER = 0;
     for(int j=0; j<MEMBUF; j++){
       for(int i=0; i<CORES; i++){ // tx
-        sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
         for(int k=0; k<CORES; k++){ //rx
           core[k].rx[j] = core[i].tx[j];  
         }
       }
+      TDMCYCLE_REGISTER++;
+      sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
       usleep(100); //much slower than the cores on purpose, so they can poll
     }
     // This should be it:
-    TDMCYCLE_REGISTER++;
+    TDMROUND_REGISTER++;
+    sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
     usleep(100);
   }
   // stop the cores
