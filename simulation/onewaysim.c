@@ -159,9 +159,13 @@ void *nocthreadfunc(void *coreid)
   TDMROUND_REGISTER = 0;
   for (int n=0; n<10; n++) { //number of runs
     TDMCYCLE_REGISTER = 0;
+    // one round
     for(int j=0; j<MEMBUF; j++){
+      // one word from each to each
       for(int i=0; i<CORES; i++){ // tx
         for(int k=0; k<CORES; k++){ //rx
+          // this is broken as it does not distinguish between the different RX and TX
+          // buffers.
           core[k].rx[j] = core[i].tx[j];  
         }
       }
