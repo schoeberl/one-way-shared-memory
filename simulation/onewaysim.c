@@ -14,6 +14,13 @@
 #include <stdarg.h>
 #include <string.h>
 
+// NoC configuration
+#define CORES 4
+// one core configuration
+#define MEMBUF 4 // 32-bit words
+#define TXRXMEMSIZE (MEMBUF * (CORES - 1))
+
+
 //print stuff
 static pthread_mutex_t printf_mutex;
 int sync_printf(const char *format, ...)
@@ -30,8 +37,8 @@ int sync_printf(const char *format, ...)
 
 // start with hard coded 4 cores for a quick start
 
-unsigned long alltxmem[4][1000];
-unsigned long allrxmem[4][1000];
+unsigned long alltxmem[CORES][TXRXMEMSIZE];
+unsigned long allrxmem[CORES][TXRXMEMSIZE];
 
 void *coredo(void *vargp)
 {
@@ -121,11 +128,6 @@ int main1()
 //TODO: merge the code above and below
 ///////////////////////////////////////////////////////////////////////////////
 
-// NoC configuration
-#define CORES 4
-// one core configuration
-#define MEMBUF 4 // 32-bit words
-#define TXRXMEMSIZE (MEMBUF * (CORES - 1))
 
 // patmos hardware registers provided via Scala HDL
 typedef volatile unsigned long PATMOS_REGISTER;
@@ -140,10 +142,8 @@ PATMOS_REGISTER TDMCYCLE_REGISTER;
 
 typedef struct Core
 {
-  // some function to be run by the core
-  //int (*run)(int)
-  unsigned long tx[TXRXMEMSIZE];
-  unsigned long rx[TXRXMEMSIZE];
+  unsigned long* txmem; //tx[TXRXMEMSIZE];
+  unsigned long* rxmem; //rx[TXRXMEMSIZE];
 } Core;
 
 // declare noc consisting of cores
@@ -166,7 +166,7 @@ void *nocthreadfunc(void *coreid)
         for(int k=0; k<CORES; k++){ //rx
           // this is broken as it does not distinguish between the different RX and TX
           // buffers.
-          core[k].rx[j] = core[i].tx[j];  
+          core[k].rxmem[j] = core[i].txmem[j];  
         }
       }
       TDMCYCLE_REGISTER++;
@@ -186,11 +186,14 @@ void initpatmos()
 {
   TDMROUND_REGISTER = 0;
   TDMCYCLE_REGISTER = 0;
+
   // zero tx and rx
   for(int i=0; i<CORES; i++){ // tx
+    core[i].rxmem = allrxmem[i];
+    core[i].txmem = alltxmem[i];
     for(int j=0; j<MEMBUF; j++){
-      core[i].tx[j] = 0;
-      core[i].rx[j] = 0;
+      core[i].txmem[j] = 0;
+      core[i].rxmem[j] = 0;
     }
   }
   
@@ -242,10 +245,13 @@ void *corethreadtbs(void *coreid)
 void runtesttbs(){
   sync_printf("start: runtesttbs() ...\n");
   //start cores 
+    // Just to make it clear that those are accessed by threads
+  int id[CORES];
   pthread_t corethreads[CORES];
   for (long i = 0; i < CORES; i++)
   {
-    int returncode = pthread_create(&corethreads[i], NULL, corethreadtbs, (void *)i);
+    id[i] = i;
+    int returncode = pthread_create(&corethreads[i], NULL, corethreadtbs, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -292,7 +298,7 @@ void *corethreadhsp(void *coreid)
     
   //kickstart with sending a request to each of the other cores
   txmsg.reqid = 1; // want to get message 1 from another core (and no more)
-  memcpy(&core[cid].tx[0], &txmsg, sizeof(txmsg));
+  memcpy(&core[cid].txmem[0], &txmsg, sizeof(txmsg));
 
   while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
@@ -303,7 +309,7 @@ void *corethreadhsp(void *coreid)
     }
     if(tdmround != TDMROUND_REGISTER){
       // copy what we got
-      memcpy(&rxmsg, core[cid].rx, sizeof(rxmsg));
+      memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
       // first we will see the request for message id 1 arriving at each core
       // then we will see that each core responds with message 1 and some data
       // it keeps repeating the same message until it gets another request for a new
@@ -317,7 +323,7 @@ void *corethreadhsp(void *coreid)
         txmsg.data1 = step;
         txmsg.data2 = cid;
         // schedule for sending (tx)
-        memcpy(core[cid].tx, &txmsg, sizeof(txmsg));
+        memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
       }
       
       tdmround = TDMROUND_REGISTER;
@@ -330,10 +336,13 @@ void runhandshakeprotocoltest(){
   sync_printf("start: runtesthsp() ...\n");
 
   //start cores 
+  int id[CORES];
   pthread_t corethreads[CORES];
+  
   for (long i = 0; i < CORES; i++)
   {
-    int returncode = pthread_create(&corethreads[i], NULL, corethreadhsp, (void *)i);
+    id[i] = i;
+    int returncode = pthread_create(&corethreads[i], NULL, corethreadhsp, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -382,7 +391,7 @@ void *corethreades(void *coreid)
     
   //kickstart with sending a request to each of the other cores
   txmsg.reqid = 1; // want to get message 1 from another core (and no more)
-  memcpy(&core[cid].tx[0], &txmsg, sizeof(txmsg));
+  memcpy(&core[cid].txmem[0], &txmsg, sizeof(txmsg));
 
   while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
@@ -393,7 +402,7 @@ void *corethreades(void *coreid)
     }
     if(tdmround != TDMROUND_REGISTER){
       // copy what we got
-      memcpy(&rxmsg, core[cid].rx, sizeof(rxmsg));
+      memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
 
       // see handshaking protocol (which this is built upon)
 
@@ -406,7 +415,7 @@ void *corethreades(void *coreid)
         txmsg.data1 = cid;
         txmsg.data2 = rxmsg.reqid + rxmsg.reqid + cid; // not real
         // schedule for sending (tx)
-        memcpy(core[cid].tx, &txmsg, sizeof(txmsg));
+        memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
       }
 
       // is it a response?
@@ -425,9 +434,11 @@ void runexchangestatetest(){
   
   //start cores 
   pthread_t corethreads[CORES];
+  int id[CORES];
   for (long i = 0; i < CORES; i++)
   {
-    int returncode = pthread_create(&corethreads[i], NULL, corethreades, (void *)i);
+    id[i] = i;
+    int returncode = pthread_create(&corethreads[i], NULL, corethreades, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -482,9 +493,9 @@ void *corethreadsdb(void *coreid)
 
       // copy what we got into the passive buffer
       if(a_in_active)     
-        memcpy(&buffer_in_b, core[cid].rx, sizeof(buffer_t));
+        memcpy(&buffer_in_b, core[cid].rxmem, sizeof(buffer_t));
       else 
-        memcpy(&buffer_in_a, core[cid].rx, sizeof(buffer_t));
+        memcpy(&buffer_in_a, core[cid].rxmem, sizeof(buffer_t));
 
       if(a_in_active){
         active_buffer_in = &buffer_in_b;
@@ -496,10 +507,10 @@ void *corethreadsdb(void *coreid)
 
       // tx new data for other buffers at another core
       // just step data, which is only related to thread scheduling (artificial data)
-      core[cid].tx[0] = step;
-      core[cid].tx[1] = step + 1;
-      core[cid].tx[2] = step + 2;
-      core[cid].tx[3] = step + 3;
+      core[cid].txmem[0] = step;
+      core[cid].txmem[1] = step + 1;
+      core[cid].txmem[2] = step + 2;
+      core[cid].txmem[3] = step + 3;
             
       tdmround = TDMROUND_REGISTER;
     }
@@ -512,9 +523,11 @@ void runstreamingdoublebuffertest(){
   
   //start cores 
   pthread_t corethreads[CORES];
+  int id[CORES];
   for (long i = 0; i < CORES; i++)
   {
-    int returncode = pthread_create(&corethreads[i], NULL, corethreadsdb, (void *)i);
+    id[i] = i;
+    int returncode = pthread_create(&corethreads[i], NULL, corethreadsdb, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
