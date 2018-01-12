@@ -42,7 +42,6 @@ unsigned long allrxmem[CORES][TXRXMEMSIZE];
 
 void *coredo(void *vargp)
 {
-
   int id = *((int *)vargp);
   unsigned long *txmem;
   txmem = alltxmem[id];
@@ -223,7 +222,7 @@ void initpatmos()
 // the cores
 void *corethreadtbs(void *coreid)
 {
-  long cid = (long)coreid;
+  int cid = *((int *)coreid);
   int step = 0;
   unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
@@ -287,7 +286,7 @@ typedef struct handshakemsg_t{
 // the cores
 void *corethreadhsp(void *coreid)
 {
-  long cid = (long)coreid;
+  int cid = *((int *)coreid);
   int step = 0;
   unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
@@ -380,7 +379,7 @@ typedef struct es_msg_t{
 // the cores
 void *corethreades(void *coreid)
 {
-  long cid = (long)coreid;
+  int cid = *((int *)coreid);
   int step = 0;
   unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
@@ -469,7 +468,7 @@ typedef struct buffer_t{
 // the cores
 void *corethreadsdb(void *coreid)
 {
-  long cid = (long)coreid;
+  int cid = *((int *)coreid);
   int step = 0;
   unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
