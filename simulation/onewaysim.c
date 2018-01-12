@@ -163,9 +163,8 @@ void *nocthreadfunc(void *coreid)
       // one word from each to each
       for(int i=0; i<CORES; i++){ // tx
         for(int k=0; k<CORES; k++){ //rx
-          // this is broken as it does not distinguish between the different RX and TX
-          // buffers.
-          core[k].rxmem[j] = core[i].txmem[j];  
+          // The following is one memory mapping, but not the one from the real hardware
+          core[k].rxmem[i*MEMBUF+j] = core[i].txmem[k*MEMBUF+j];  
         }
       }
       TDMCYCLE_REGISTER++;
