@@ -1,5 +1,6 @@
 /*
   A software simulation of the One-Way Shared Memory
+  Runs on the PC
 
   Copyright: CBS, DTU
   Authors: Rasmus Ulslev Pedersen, Martin Schoeberl
@@ -13,11 +14,9 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include "onewaysim.h"
 
-// NoC configuration
-#define CORES 4
-// one core configuration
-#define MEMBUF 4 // 32-bit words
+
 
 //print support so the threads call printf in order
 static pthread_mutex_t printf_mutex;
@@ -32,10 +31,6 @@ int sync_printf(const char *format, ...)
 
     va_end(args);
 }
-
-// global memory
-unsigned long alltxmem[CORES][MEMBUF*CORES]; // a slot for loop-back testing included
-unsigned long allrxmem[CORES][MEMBUF*CORES]; // a slot for loop-back testing included
 
 void *coredo(void *vargp)
 {
@@ -122,33 +117,10 @@ int main1()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-
-// patmos hardware registers provided via Scala HDL
-typedef volatile unsigned long PATMOS_REGISTER;
-
-// defined patmos hardware registers (simulated)
-// we do not have one for the SLOT counter in the simulator
-
-// one word delivered from all to all
-PATMOS_REGISTER TDMROUND_REGISTER; 
-// one memory block delivered (word for word) from all to all
-PATMOS_REGISTER HYPERPERIOD_REGISTER;
-
-// shared common simulation structs
-typedef struct Core
-{
-  // each core's local memory use a particular row of ms's global memory
-  // global memory: unsigned long alltxmem[CORES][TXRXMEMSIZE]
-  //                unsigned long allrxmem[CORES][TXRXMEMSIZE]
-  unsigned long* txmem; //tx[TXRXMEMSIZE];
-  unsigned long* rxmem; //rx[TXRXMEMSIZE];
-} Core;
-
-// declare noc consisting of cores
-static Core core[CORES];
-
 // init patmos (simulated) internals 
-static bool runnoc;
+
+
+Core core[CORES];
 
 // the NoC (same for all comm. patterns)
 // TDMROUND: 
@@ -180,6 +152,7 @@ void *nocthreadfunc(void *coreid)
   runnoc = false;
 }
 
+bool runnoc;
 void initpatmos()
 {
   TDMROUND_REGISTER = 0;
@@ -218,28 +191,6 @@ void initpatmos()
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
 
-// the cores
-void *corethreadtbs(void *coreid)
-{
-  int cid = *((int *)coreid);
-  int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  while(runnoc){
-    // the cores are aware of the global cycle times for time-based-synchronization
-    // the cores print their output after the cycle count changes are detected
-    if(tdmround != TDMROUND_REGISTER){
-      sync_printf("Core #%ld: TDMROUND_REGISTER(*)=%lu, HYPERPERIOD_REGISTER   =%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER);  
-      tdmround = TDMROUND_REGISTER;
-    }
-    if(hyperperiod != HYPERPERIOD_REGISTER){
-      sync_printf("Core #%ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER);        
-      hyperperiod = HYPERPERIOD_REGISTER;
-    }
-    step++;
-  }
-}
-
 void runtesttbs(){
   sync_printf("start: runtesttbs() ...\n");
   //start cores 
@@ -270,65 +221,6 @@ void runtesttbs(){
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Handshaking Protocol
 ///////////////////////////////////////////////////////////////////////////////
-
-// a struct for handshaking
-typedef struct handshakemsg_t{
-  // if non-zero then valid msg
-  // if respid = 0 then it is a request
-  unsigned long reqid; 
-  // if non-zero then it is a response
-  unsigned long respid;
-  unsigned long data1;
-  unsigned long data2;
-} handshakemsg_t;
-
-// the cores
-void *corethreadhsp(void *coreid)
-{
-  int cid = *((int *)coreid);
-  int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  handshakemsg_t txmsg;
-  memset(&txmsg, 0, sizeof(txmsg));
-  handshakemsg_t rxmsg;
-  memset(&rxmsg, 0, sizeof(rxmsg));
-    
-  //kickstart with sending a request to each of the other cores
-  txmsg.reqid = 1; // want to get message 1 from another core (and no more)
-  memcpy(&core[cid].txmem[0], &txmsg, sizeof(txmsg));
-
-  while(runnoc){
-    // the cores are aware of the global cycle times for time-based-synchronization
-    // the cores print their output after the cycle count changes are detected
-    if(tdmround != TDMROUND_REGISTER){
-      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmround = TDMROUND_REGISTER;
-    }
-    if(hyperperiod != HYPERPERIOD_REGISTER){
-      // copy what we got
-      memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
-      // first we will see the request for message id 1 arriving at each core
-      // then we will see that each core responds with message 1 and some data
-      // it keeps repeating the same message until it gets another request for a new
-      // message id
-      sync_printf("Core #%ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
-      // is it a request?
-      if (rxmsg.reqid > 0 && rxmsg.respid == 0){
-        memset(&txmsg, 0, sizeof(txmsg));
-        txmsg.reqid = rxmsg.reqid;
-        txmsg.respid = rxmsg.reqid;
-        txmsg.data1 = step;
-        txmsg.data2 = cid;
-        // schedule for sending (tx)
-        memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
-      }
-      
-      hyperperiod = HYPERPERIOD_REGISTER;
-    }
-    step++;
-  }
-}
 
 void runhandshakeprotocoltest(){
   sync_printf("start: runtesthsp() ...\n");
@@ -362,71 +254,6 @@ void runhandshakeprotocoltest(){
 //COMMUNICATION PATTERN: Exchange of state
 ///////////////////////////////////////////////////////////////////////////////
 
-// a struct for handshaking
-typedef struct es_msg_t{
-  // if non-zero then valid msg
-  // if respid = 0 then it is a request
-  unsigned long reqid; 
-  // if non-zero then it is a response
-  unsigned long respid;
-  //sensor id
-  unsigned long sensorid;
-  //sensor value
-  unsigned long sensorval;
-} es_msg_t;
-
-// the cores
-void *corethreades(void *coreid)
-{
-  int cid = *((int *)coreid);
-  int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  handshakemsg_t txmsg;
-  memset(&txmsg, 0, sizeof(txmsg));
-  handshakemsg_t rxmsg;
-  memset(&rxmsg, 0, sizeof(rxmsg));
-    
-  //kickstart with sending a request to each of the other cores
-  txmsg.reqid = 1; // want to get message 1 from another core (and no more)
-  memcpy(&core[cid].txmem[0], &txmsg, sizeof(txmsg));
-
-  while(runnoc){
-    // the cores are aware of the global cycle times for time-based-synchronization
-    // the cores print their output after the cycle count changes are detected
-    if(tdmround != TDMROUND_REGISTER){
-      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmround = TDMROUND_REGISTER;
-    }
-    if(hyperperiod != HYPERPERIOD_REGISTER){
-      // copy what we got
-      memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
-
-      // see handshaking protocol (which this is built upon)
-
-      // is it a request?
-      if (rxmsg.reqid > 0 && rxmsg.respid == 0){
-        sync_printf("Core #%ld sensor request: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
-        memset(&txmsg, 0, sizeof(txmsg));
-        txmsg.reqid = rxmsg.reqid;
-        txmsg.respid = rxmsg.reqid;
-        txmsg.data1 = cid;
-        txmsg.data2 = rxmsg.reqid + rxmsg.reqid + cid; // not real
-        // schedule for sending (tx)
-        memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
-      }
-
-      // is it a response?
-      if (rxmsg.reqid > 0 && rxmsg.respid == rxmsg.reqid){
-        sync_printf("Core #%ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.sensorid=%lu,\n  rxmsg.sensorval=%lu\n", cid, TDMROUND_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
-      }
-      
-      hyperperiod = HYPERPERIOD_REGISTER;
-    }
-    step++;
-  }
-}
-
 void runexchangestatetest(){
   sync_printf("start: runexchangestatetest() ...\n");
   
@@ -459,63 +286,6 @@ void runexchangestatetest(){
 //COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
 ///////////////////////////////////////////////////////////////////////////////
 
-// a struct for one buffer
-typedef struct buffer_t{
-  unsigned long data[MEMBUF]; 
-} buffer_t;
-
-// the cores
-void *corethreadsdb(void *coreid)
-{
-  int cid = *((int *)coreid);
-  int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  buffer_t buffer_in_a;
-  buffer_t buffer_in_b;
-  buffer_t* active_buffer_in = &buffer_in_a;
-  bool a_in_active = true;
-  memset(&buffer_in_a, 0, sizeof(buffer_in_a));
-  memset(&buffer_in_b, 0, sizeof(buffer_in_b));
-
-  while(runnoc){
-    // the cores are aware of the global cycle times for time-based-synchronization
-    // the cores print their output after the cycle count changes are detected
-    if(tdmround != TDMROUND_REGISTER){
-      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmround = TDMROUND_REGISTER;
-    }
-    if(hyperperiod != HYPERPERIOD_REGISTER){
-      //print the active buffer to see what is in it
-      sync_printf("Core #%ld active buffer: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  active_buffer_in->data[0]=%lu,\n  active_buffer_in->data[1]=%lu,\n  active_buffer_in->data[2]=%lu,\n  active_buffer_in->data[3]=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, active_buffer_in->data[0], active_buffer_in->data[1], active_buffer_in->data[2], active_buffer_in->data[3]);  
-
-      // copy what we got into the passive buffer
-      if(a_in_active)     
-        memcpy(&buffer_in_b, core[cid].rxmem, sizeof(buffer_t));
-      else 
-        memcpy(&buffer_in_a, core[cid].rxmem, sizeof(buffer_t));
-
-      if(a_in_active){
-        active_buffer_in = &buffer_in_b;
-        a_in_active = false;
-      } else {
-        active_buffer_in = &buffer_in_b;
-        a_in_active = true;
-      }    
-
-      // tx new data for other buffers at another core
-      // just step data, which is only related to thread scheduling (artificial data)
-      core[cid].txmem[0] = step;
-      core[cid].txmem[1] = step + 1;
-      core[cid].txmem[2] = step + 2;
-      core[cid].txmem[3] = step + 3;
-            
-      tdmround = TDMROUND_REGISTER;
-    }
-    step++;
-  }
-}
-
 void runstreamingdoublebuffertest(){
   sync_printf("start: runstreamingdoublebuffertest() ...\n");
   
@@ -547,36 +317,16 @@ void runstreamingdoublebuffertest(){
 //MAIN2
 ///////////////////////////////////////////////////////////////////////////////
 
-
-// main2
-int main2()
+void initsim()
 {
-  // always called
-  initpatmos();
-
-  // call one of these tests (and create your own as needed)
-  //runtesttbs(); // time-based synchronization
-  //runhandshakeprotocoltest();
-  //runexchangestatetest();
-  runstreamingdoublebuffertest();
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//shared main
-///////////////////////////////////////////////////////////////////////////////
-// MS: yes, we are missing Java with the option on having more than one main entry
-// into a project :-(
-
-int main(int argc, char *argv[])
-{
-  // synchronized printf 
   pthread_mutex_init(&printf_mutex, NULL);
-
-  printf("\n");
-  printf("*******************************************************************************\n");
-  printf("Calling 'onewaysim' main(): ***************************************************\n");
-  printf("*******************************************************************************\n");
-  //main1();
-  main2();
-  printf("\n");
+ 
+  initpatmos();
+  runtesttbs(); // time-based synchronization
+  initpatmos();
+  runhandshakeprotocoltest();
+  initpatmos();
+  runexchangestatetest();
+  initpatmos();
+  runstreamingdoublebuffertest();
 }
