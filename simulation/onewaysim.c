@@ -18,10 +18,8 @@
 #define CORES 4
 // one core configuration
 #define MEMBUF 4 // 32-bit words
-#define TXRXMEMSIZE (MEMBUF * (CORES - 1))
 
-
-//print stuff
+//print support so the threads call printf in order
 static pthread_mutex_t printf_mutex;
 int sync_printf(const char *format, ...)
 {
@@ -35,10 +33,9 @@ int sync_printf(const char *format, ...)
     va_end(args);
 }
 
-// start with hard coded 4 cores for a quick start
-
-unsigned long alltxmem[CORES][TXRXMEMSIZE];
-unsigned long allrxmem[CORES][TXRXMEMSIZE];
+// global memory
+unsigned long alltxmem[CORES][MEMBUF*CORES]; // a slot for loop-back testing included
+unsigned long allrxmem[CORES][MEMBUF*CORES]; // a slot for loop-back testing included
 
 void *coredo(void *vargp)
 {
@@ -66,7 +63,6 @@ void *coredo(void *vargp)
 
 int main1()
 {
-
   // Just to make it clear that those are accessed by threads
   static pthread_t tid[4];
   static int id[4];
@@ -124,7 +120,6 @@ int main1()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//TODO: merge the code above and below
 ///////////////////////////////////////////////////////////////////////////////
 
 
@@ -132,15 +127,19 @@ int main1()
 typedef volatile unsigned long PATMOS_REGISTER;
 
 // defined patmos hardware registers (simulated)
+// we do not have one for the SLOT counter in the simulator
+
 // one word delivered from all to all
 PATMOS_REGISTER TDMROUND_REGISTER; 
 // one memory block delivered (word for word) from all to all
-PATMOS_REGISTER TDMCYCLE_REGISTER;
+PATMOS_REGISTER HYPERPERIOD_REGISTER;
 
 // shared common simulation structs
-
 typedef struct Core
 {
+  // each core's local memory use a particular row of ms's global memory
+  // global memory: unsigned long alltxmem[CORES][TXRXMEMSIZE]
+  //                unsigned long allrxmem[CORES][TXRXMEMSIZE]
   unsigned long* txmem; //tx[TXRXMEMSIZE];
   unsigned long* rxmem; //rx[TXRXMEMSIZE];
 } Core;
@@ -152,12 +151,13 @@ static Core core[CORES];
 static bool runnoc;
 
 // the NoC (same for all comm. patterns)
+// TDMROUND: 
 void *nocthreadfunc(void *coreid)
 {
   printf("NoC here ...\n");
   TDMROUND_REGISTER = 0;
-  for (int n=0; n<10; n++) { //number of runs
-    TDMCYCLE_REGISTER = 0;
+  for (int n=0; n<1; n++) { //number of runs
+    HYPERPERIOD_REGISTER = 0;
     // one round
     for(int j=0; j<MEMBUF; j++){
       // one word from each to each
@@ -168,13 +168,13 @@ void *nocthreadfunc(void *coreid)
           core[k].rxmem[j] = core[i].txmem[j];  
         }
       }
-      TDMCYCLE_REGISTER++;
-      sync_printf("nocthread: TDMCYCLE_REGISTER=%lu\n", TDMCYCLE_REGISTER);
+      TDMROUND_REGISTER++;
+      sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
       usleep(100); //much slower than the cores on purpose, so they can poll
     }
     // This should be it:
-    TDMROUND_REGISTER++;
-    sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+    HYPERPERIOD_REGISTER++;
+    sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
     usleep(100);
   }
   // stop the cores
@@ -184,7 +184,7 @@ void *nocthreadfunc(void *coreid)
 void initpatmos()
 {
   TDMROUND_REGISTER = 0;
-  TDMCYCLE_REGISTER = 0;
+  HYPERPERIOD_REGISTER = 0;
 
   // zero tx and rx
   for(int i=0; i<CORES; i++){ // tx
@@ -224,18 +224,18 @@ void *corethreadtbs(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
-  unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
+  unsigned long hyperperiod = 0xFFFFFFFF;
   while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are detected
-    if(tdmcycle != TDMCYCLE_REGISTER){
-      sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmcycle = TDMCYCLE_REGISTER;
-    }
     if(tdmround != TDMROUND_REGISTER){
-      sync_printf("Core #%ld: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      sync_printf("Core #%ld: TDMROUND_REGISTER(*)=%lu, HYPERPERIOD_REGISTER   =%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER);  
       tdmround = TDMROUND_REGISTER;
+    }
+    if(hyperperiod != HYPERPERIOD_REGISTER){
+      sync_printf("Core #%ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER);        
+      hyperperiod = HYPERPERIOD_REGISTER;
     }
     step++;
   }
@@ -288,8 +288,8 @@ void *corethreadhsp(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
-  unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
+  unsigned long hyperperiod = 0xFFFFFFFF;
   handshakemsg_t txmsg;
   memset(&txmsg, 0, sizeof(txmsg));
   handshakemsg_t rxmsg;
@@ -302,18 +302,18 @@ void *corethreadhsp(void *coreid)
   while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are detected
-    if(tdmcycle != TDMCYCLE_REGISTER){
-      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmcycle = TDMCYCLE_REGISTER;
-    }
     if(tdmround != TDMROUND_REGISTER){
+      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmround = TDMROUND_REGISTER;
+    }
+    if(hyperperiod != HYPERPERIOD_REGISTER){
       // copy what we got
       memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
       // first we will see the request for message id 1 arriving at each core
       // then we will see that each core responds with message 1 and some data
       // it keeps repeating the same message until it gets another request for a new
       // message id
-      sync_printf("Core #%ld: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
+      sync_printf("Core #%ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
       // is it a request?
       if (rxmsg.reqid > 0 && rxmsg.respid == 0){
         memset(&txmsg, 0, sizeof(txmsg));
@@ -325,7 +325,7 @@ void *corethreadhsp(void *coreid)
         memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
       }
       
-      tdmround = TDMROUND_REGISTER;
+      hyperperiod = HYPERPERIOD_REGISTER;
     }
     step++;
   }
@@ -381,8 +381,8 @@ void *corethreades(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
-  unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
+  unsigned long hyperperiod = 0xFFFFFFFF;
   handshakemsg_t txmsg;
   memset(&txmsg, 0, sizeof(txmsg));
   handshakemsg_t rxmsg;
@@ -395,11 +395,11 @@ void *corethreades(void *coreid)
   while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are detected
-    if(tdmcycle != TDMCYCLE_REGISTER){
-      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmcycle = TDMCYCLE_REGISTER;
-    }
     if(tdmround != TDMROUND_REGISTER){
+      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmround = TDMROUND_REGISTER;
+    }
+    if(hyperperiod != HYPERPERIOD_REGISTER){
       // copy what we got
       memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
 
@@ -407,7 +407,7 @@ void *corethreades(void *coreid)
 
       // is it a request?
       if (rxmsg.reqid > 0 && rxmsg.respid == 0){
-        sync_printf("Core #%ld sensor request: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
+        sync_printf("Core #%ld sensor request: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
         memset(&txmsg, 0, sizeof(txmsg));
         txmsg.reqid = rxmsg.reqid;
         txmsg.respid = rxmsg.reqid;
@@ -419,10 +419,10 @@ void *corethreades(void *coreid)
 
       // is it a response?
       if (rxmsg.reqid > 0 && rxmsg.respid == rxmsg.reqid){
-        sync_printf("Core #%ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.sensorid=%lu,\n  rxmsg.sensorval=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
+        sync_printf("Core #%ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.sensorid=%lu,\n  rxmsg.sensorval=%lu\n", cid, TDMROUND_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);  
       }
       
-      tdmround = TDMROUND_REGISTER;
+      hyperperiod = HYPERPERIOD_REGISTER;
     }
     step++;
   }
@@ -470,8 +470,8 @@ void *corethreadsdb(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
-  unsigned long tdmcycle = 0xFFFFFFFF;
   unsigned long tdmround = 0xFFFFFFFF;
+  unsigned long hyperperiod = 0xFFFFFFFF;
   buffer_t buffer_in_a;
   buffer_t buffer_in_b;
   buffer_t* active_buffer_in = &buffer_in_a;
@@ -482,13 +482,13 @@ void *corethreadsdb(void *coreid)
   while(runnoc){
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are detected
-    if(tdmcycle != TDMCYCLE_REGISTER){
-      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
-      tdmcycle = TDMCYCLE_REGISTER;
-    }
     if(tdmround != TDMROUND_REGISTER){
+      //sync_printf("Core #%ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);  
+      tdmround = TDMROUND_REGISTER;
+    }
+    if(hyperperiod != HYPERPERIOD_REGISTER){
       //print the active buffer to see what is in it
-      sync_printf("Core #%ld active buffer: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  active_buffer_in->data[0]=%lu,\n  active_buffer_in->data[1]=%lu,\n  active_buffer_in->data[2]=%lu,\n  active_buffer_in->data[3]=%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER, active_buffer_in->data[0], active_buffer_in->data[1], active_buffer_in->data[2], active_buffer_in->data[3]);  
+      sync_printf("Core #%ld active buffer: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  active_buffer_in->data[0]=%lu,\n  active_buffer_in->data[1]=%lu,\n  active_buffer_in->data[2]=%lu,\n  active_buffer_in->data[3]=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, active_buffer_in->data[0], active_buffer_in->data[1], active_buffer_in->data[2], active_buffer_in->data[3]);  
 
       // copy what we got into the passive buffer
       if(a_in_active)     
