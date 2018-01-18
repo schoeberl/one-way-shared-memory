@@ -16,6 +16,55 @@
 #include <string.h>
 #include "onewaysim.h"
 
+//target tables
+//information on where to send tx slots
+//example: rxslot[1][3][2] = 1 means that core 1 will tx a word to core 3 
+//           from tx slot 2 into rx slot 1 respectively
+//useful when working on code in the transmitting end
+int rxslots[CORES][CORES][CORES - 1];
+
+//find the tx core that filled a certain rxslot.
+//useful when working in code running in the receiving end
+int txcoreids[CORES][CORES-1];
+
+// init rxslot and txcoreid lookup tables
+void inittxrxmaps()
+{
+  for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
+  {
+    int txslot = 0;
+    for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
+    {
+      if (rxcoreid != txcoreid) // cannot tx to itself
+      {
+        int rxslot = 0;
+        if (txcoreid > rxcoreid)
+          rxslot = txcoreid - 1;
+        else
+          rxslot = txcoreid;
+        rxslots[txcoreid][rxcoreid][txslot] = rxslot;
+        txcoreids[rxcoreid][rxslot] = txcoreid;
+        //printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslot);
+        //printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreid);
+        txslot++;
+      }
+    }
+    printf("\n");
+  }
+}
+
+// rx slot from txcoreid, rxcoreid, and txslot
+int getrxslot(int txcoreid, int rxcoreid, int txslot){
+   //printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslots[txcoreid][rxcoreid][txslot]);
+   return rxslots[txcoreid][rxcoreid][txslot];
+}
+
+// txcoreid from rxcoreid and rxslot
+int gettxcoreid(int rxcoreid, int rxslot){
+  //printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreids[rxcoreid][rxslot]);
+  return txcoreids[rxcoreid][rxslot];
+}
+
 //print support so the threads call printf in order
 static pthread_mutex_t printf_mutex;
 int sync_printf(const char *format, ...)
@@ -131,7 +180,7 @@ void *nocthreadfunc(void *coreid)
           //  ii--;
 
           // TODO: map to the real HW
-          
+
           core[jj].rxmem[ii][m] = core[i].txmem[j][m];
           //jj++;
           //ii++;
@@ -333,9 +382,9 @@ void runstreamingdoublebuffertest()
 void initsim()
 {
   pthread_mutex_init(&printf_mutex, NULL);
-
-  initpatmos();
-  runtesttbs(); // time-based synchronization
+  inittxrxmaps();
+  //initpatmos();
+  //runtesttbs(); // time-based synchronization
   //initpatmos();
   //runhandshakeprotocoltest();
   //initpatmos();
