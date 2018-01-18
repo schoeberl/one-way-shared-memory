@@ -16,8 +16,8 @@
 #include <string.h>
 #include "onewaysim.h"
 
-unsigned long alltxmem[CORES][CORES - 1][MEMBUF]; 
-unsigned long allrxmem[CORES][CORES - 1][MEMBUF]; 
+unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
+unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
@@ -56,52 +56,56 @@ void *corethreadtbs(void *coreid)
 void *corethreadhsp(void *coreid)
 {
   int cid = *((int *)coreid);
-  int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  handshakemsg_t txmsg;
+  static int step = 0;
+  static unsigned long tdmround = 0xFFFFFFFF;
+  static unsigned long hyperperiod = 0xFFFFFFFF;
+  static handshakemsg_t txmsg;
   memset(&txmsg, 0, sizeof(txmsg));
-  handshakemsg_t rxmsg;
+  static handshakemsg_t rxmsg;
   memset(&rxmsg, 0, sizeof(rxmsg));
 
+  sync_printf("in corethreadhsp(%d)...\n", cid);
+sync_printf("sizeof(txmsg)=%d\n", sizeof(txmsg));
   //kickstart with sending a request to each of the other cores
   txmsg.reqid = 1; // want to get message 1 from another core (and no more)
-  memcpy(&core[cid].txmem[0], &txmsg, sizeof(txmsg));
-
-  while (runnoc)
+memtxprint(cid);
+printf("\n");
+  memcpy(core[cid].txmem[0], &txmsg, sizeof(txmsg));
+memtxprint(cid);
+  //while (runnoc)
+  //{
+  // the cores are aware of the global cycle times for time-based-synchronization
+  // the cores print their output after the cycle count changes are detected
+  if (tdmround != TDMROUND_REGISTER)
   {
-    // the cores are aware of the global cycle times for time-based-synchronization
-    // the cores print their output after the cycle count changes are detected
-    if (tdmround != TDMROUND_REGISTER)
-    {
-      //sync_printf("Core %ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);
-      tdmround = TDMROUND_REGISTER;
-    }
-    if (hyperperiod != HYPERPERIOD_REGISTER)
-    {
-      // copy what we got
-      memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
-      // first we will see the request for message id 1 arriving at each core
-      // then we will see that each core responds with message 1 and some data
-      // it keeps repeating the same message until it gets another request for a new
-      // message id
-      sync_printf("Core %ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);
-      // is it a request?
-      if (rxmsg.reqid > 0 && rxmsg.respid == 0)
-      {
-        memset(&txmsg, 0, sizeof(txmsg));
-        txmsg.reqid = rxmsg.reqid;
-        txmsg.respid = rxmsg.reqid;
-        txmsg.data1 = step;
-        txmsg.data2 = cid;
-        // schedule for sending (tx)
-        memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
-      }
-
-      hyperperiod = HYPERPERIOD_REGISTER;
-    }
-    step++;
+    //sync_printf("Core %ld: TDMCYCLE_REGISTER(*)=%lu, TDMROUND_REGISTER   =%lu\n", cid, TDMCYCLE_REGISTER, TDMROUND_REGISTER);
+    tdmround = TDMROUND_REGISTER;
   }
+  if (hyperperiod != HYPERPERIOD_REGISTER)
+  {
+    // copy what we got
+memcpy(&rxmsg, core[cid].rxmem[0], sizeof(rxmsg));
+    // first we will see the request for message id 1 arriving at each core
+    // then we will see that each core responds with message 1 and some data
+    // it keeps repeating the same message until it gets another request for a new
+    // message id
+    sync_printf("Core %ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);
+    // is it a request?
+    if (rxmsg.reqid > 0 && rxmsg.respid == 0)
+    {
+      memset(&txmsg, 0, sizeof(txmsg));
+      txmsg.reqid = rxmsg.reqid;
+      txmsg.respid = rxmsg.reqid;
+      txmsg.data1 = step;
+      txmsg.data2 = cid;
+      // schedule for sending (tx)
+memcpy(core[cid].txmem[0], &txmsg, sizeof(txmsg));
+    }
+
+    hyperperiod = HYPERPERIOD_REGISTER;
+  }
+  step++;
+  //}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -237,9 +241,9 @@ void *corethreadsdb(void *coreid)
 int main(int argc, char *argv[])
 {
   printf("\n");
-  printf("*******************************************************************************\n");
-  printf("'onewaysim' main(): ***********************************************************\n");
-  printf("*******************************************************************************\n");
+  printf("*********************************************************************\n");
+  printf("onewaysim main(): ***************************************************\n");
+  printf("*********************************************************************\n");
   //main1();
   initsim();
   printf("\n");

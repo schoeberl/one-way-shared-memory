@@ -92,4 +92,8 @@ void *corethreadsdb(void *coreid);
 
 void initsim();
 
+void memtxprint(int coreid);
+void memrxprint(int coreid);
+void memallprint();
+
 #endif

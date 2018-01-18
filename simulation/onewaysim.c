@@ -7,7 +7,9 @@
   License: Simplified BSD
 */
 
-#include <pthread.h>
+#ifdef USEPTHREAD_FLAG
+  #include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,16 +18,32 @@
 #include <string.h>
 #include "onewaysim.h"
 
+
+
+//print support so the threads call printf in order
+//static pthread_mutex_t printf_mutex;
+int sync_printf(const char *format, ...)
+{
+  va_list args;
+  va_start(args, format);
+
+  //pthread_mutex_lock(&printf_mutex);
+  vprintf(format, args);
+  //pthread_mutex_unlock(&printf_mutex);
+
+  va_end(args);
+}
+
 //target tables
 //information on where to send tx slots
-//example: rxslot[1][3][2] = 1 means that core 1 will tx a word to core 3 
+//example: rxslot[1][3][2] = 1 means that core 1 will tx a word to core 3
 //           from tx slot 2 into rx slot 1 respectively
 //useful when working on code in the transmitting end
 int rxslots[CORES][CORES][CORES - 1];
 
 //find the tx core that filled a certain rxslot.
 //useful when working in code running in the receiving end
-int txcoreids[CORES][CORES-1];
+int txcoreids[CORES][CORES - 1];
 
 // init rxslot and txcoreid lookup tables
 void inittxrxmaps()
@@ -44,41 +62,32 @@ void inittxrxmaps()
           rxslot = txcoreid;
         rxslots[txcoreid][rxcoreid][txslot] = rxslot;
         txcoreids[rxcoreid][rxslot] = txcoreid;
-        //printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslot);
-        //printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreid);
+        //sync_printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslot);
+        //sync_printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreid);
         txslot++;
       }
     }
-    printf("\n");
+    //sync_printf("\n");
   }
 }
 
 // rx slot from txcoreid, rxcoreid, and txslot
-int getrxslot(int txcoreid, int rxcoreid, int txslot){
-   //printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslots[txcoreid][rxcoreid][txslot]);
-   return rxslots[txcoreid][rxcoreid][txslot];
+int getrxslot(int txcoreid, int rxcoreid, int txslot)
+{
+  //sync_printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslots[txcoreid][rxcoreid][txslot]);
+  return rxslots[txcoreid][rxcoreid][txslot];
 }
 
 // txcoreid from rxcoreid and rxslot
-int gettxcoreid(int rxcoreid, int rxslot){
-  //printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreids[rxcoreid][rxslot]);
+int gettxcoreid(int rxcoreid, int rxslot)
+{
+  //sync_printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreids[rxcoreid][rxslot]);
   return txcoreids[rxcoreid][rxslot];
 }
 
-//print support so the threads call printf in order
-static pthread_mutex_t printf_mutex;
-int sync_printf(const char *format, ...)
-{
-  va_list args;
-  va_start(args, format);
-
-  pthread_mutex_lock(&printf_mutex);
-  vprintf(format, args);
-  pthread_mutex_unlock(&printf_mutex);
-
-  va_end(args);
-}
-
+//////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////
+// MAIN1 start
 void *coredo(void *vargp)
 {
   int id = *((int *)vargp);
@@ -102,14 +111,14 @@ void *coredo(void *vargp)
 int main1()
 {
   // Just to make it clear that those are accessed by threads
-  static pthread_t tid[4];
+  //static pthread_t tid[4];
   static int id[4];
 
   printf("\nmain1(): Simulation starts\n");
   for (int i = 0; i < 4; ++i)
   {
     id[i] = i;
-    int returncode = pthread_create(&tid[i], NULL, coredo, &id[i]);
+    //int returncode = pthread_create(&tid[i], NULL, coredo, &id[i]);
   }
 
   // main is simulating the data movement by the NIs through the NoC
@@ -131,7 +140,7 @@ int main1()
 
   for (int i = 0; i < 4; ++i)
   {
-    pthread_join(tid[i], NULL);
+    //pthread_join(tid[i], NULL);
   }
 
   printf("\n");
@@ -149,94 +158,47 @@ int main1()
   return 0;
 }
 
+// MAIN1 STOP
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
 // init patmos (simulated) internals
 Core core[CORES];
-
-// the NoC (same for all comm. patterns)
-// TDMROUND:
-void *nocthreadfunc(void *coreid)
-{
-  printf("NoC here ...\n");
-  TDMROUND_REGISTER = 0;
-  for (int n = 0; n < 1; n++)
-  { //number of runs
-    HYPERPERIOD_REGISTER = 0;
-    // one round
-    for (int m = 0; m < MEMBUF; m++)
-    {                                 // one word from each to each
-      for (int i = 0; i < CORES; i++) // from each core
-      {
-        int jj = 0;
-        int ii = 0;
-        for (int j = 0; j < CORES - 1; j++) // to the *other* cores
-        {
-          //if(j == i)
-          //  jj++;
-
-          //if(jj > i)
-          //  ii--;
-
-          // TODO: map to the real HW
-
-          core[jj].rxmem[ii][m] = core[i].txmem[j][m];
-          //jj++;
-          //ii++;
-        }
-      }
-    }
-    TDMROUND_REGISTER++;
-    sync_printf("nocthread: TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
-    usleep(100); //much slower than the cores on purpose, so they can poll
-
-    // This should be it:
-    HYPERPERIOD_REGISTER++;
-    sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
-    usleep(100);
-  }
-  // stop the cores
-  runnoc = false;
-}
-
 // signal used to stop terminate the cores
 bool runnoc;
 
-// patmos memory initialization
-void initpatmos()
+// the NoC (same for all comm. patterns)
+void *nocthreadfunc(void *coreid)
 {
-  TDMROUND_REGISTER = 0;
-  HYPERPERIOD_REGISTER = 0;
+  printf("NoC thread here ...\n");
 
-  // map ms's alltxmem and allrxmem to cores' local memory
-  for (int i = 0; i < CORES; i++)
-  { // allocate pointers to each core's membuf array
-    core[i].txmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    core[i].rxmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    for (int j = 0; j < CORES - 1; j++)
-    { // assign membuf addresses from allrx and alltx to rxmem and txmem
-      core[i].txmem[j] = alltxmem[i][j];
-      core[i].rxmem[j] = allrxmem[i][j];
-      for (int m = 0; m < MEMBUF; m++)
-      { // zero the tx and rx membuffer slots
-        // see the comment on 'struct Core'
-        core[i].txmem[j][m] = 0;
-        core[i].rxmem[j][m] = 0;
+  for (int m = 0; m < MEMBUF; m++)
+  {                                                      // one word from each to each
+    for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
+    {
+      int txslot = 0;
+      for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
+      {
+        if (txcoreid != rxcoreid) // no tx to itself
+        {
+          // printf("rxcoreid = %d\n", rxcoreid);
+          // printf("txcoreid = %d\n", txcoreid);
+          // printf("txslot   = %d\n", txslot);
+          // printf("getrxslot(txcoreid, rxcoreid, txslot)=%d\n", getrxslot(txcoreid, rxcoreid, txslot));
+          // printf("m        = %d\n", m);
+          core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
+          txslot++;
+        }
       }
+      printf("\n");
     }
+    TDMROUND_REGISTER++;
+    sync_printf("nocthread:    TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+    usleep(100); //much slower than the cores on purpose, so they can poll
   }
-
-  //start noc test control
-  runnoc = true;
-  pthread_t nocthread;
-  int returncode = pthread_create(&nocthread, NULL, nocthreadfunc, NULL);
-  if (returncode)
-  {
-    printf("Error %d ... \n", returncode);
-    exit(-1);
-  }
-  sync_printf("runtesttbs(): noc thread created ...\n");
+  HYPERPERIOD_REGISTER++;
+  sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
+  usleep(100);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -256,11 +218,12 @@ void runtesttbs()
   //start cores
   // Just to make it clear that those are accessed by threads
   int id[CORES];
-  pthread_t corethreads[CORES];
+  //pthread_t corethreads[CORES];
   for (long i = 0; i < CORES; i++)
   {
     id[i] = i;
-    int returncode = pthread_create(&corethreads[i], NULL, corethreadtbs, &id[i]);
+    int returncode = 0;
+    //returncode = pthread_create(&corethreads[i], NULL, corethreadtbs, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -272,7 +235,7 @@ void runtesttbs()
   // wait
   for (int i = 0; i < CORES; i++)
   {
-    pthread_join(corethreads[i], NULL);
+    //pthread_join(corethreads[i], NULL);
   }
   //pthread_join(nocthread, NULL);
   sync_printf("done: runtesttbs() ...\n");
@@ -288,12 +251,13 @@ void runhandshakeprotocoltest()
 
   //start cores
   int id[CORES];
-  pthread_t corethreads[CORES];
+  //pthread_t corethreads[CORES];
 
   for (long i = 0; i < CORES; i++)
   {
     id[i] = i;
-    int returncode = pthread_create(&corethreads[i], NULL, corethreadhsp, &id[i]);
+    int returncode = 0;
+    //returncode = pthread_create(&corethreads[i], NULL, corethreadhsp, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -305,7 +269,7 @@ void runhandshakeprotocoltest()
   // wait
   for (int i = 0; i < CORES; i++)
   {
-    pthread_join(corethreads[i], NULL);
+    //pthread_join(corethreads[i], NULL);
   }
   //pthread_join(nocthread, NULL);
   sync_printf("done: runtesthsp() ...\n");
@@ -320,12 +284,13 @@ void runexchangestatetest()
   sync_printf("start: runexchangestatetest() ...\n");
 
   //start cores
-  pthread_t corethreads[CORES];
+  //pthread_t corethreads[CORES];
   int id[CORES];
   for (long i = 0; i < CORES; i++)
   {
     id[i] = i;
-    int returncode = pthread_create(&corethreads[i], NULL, corethreades, &id[i]);
+    int returncode = 0;
+    //returncode = pthread_create(&corethreads[i], NULL, corethreades, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -337,7 +302,7 @@ void runexchangestatetest()
   // wait
   for (int i = 0; i < CORES; i++)
   {
-    pthread_join(corethreads[i], NULL);
+    //pthread_join(corethreads[i], NULL);
   }
   //pthread_join(nocthread, NULL);
   sync_printf("done: runexchangestatetest() ...\n");
@@ -352,12 +317,13 @@ void runstreamingdoublebuffertest()
   sync_printf("start: runstreamingdoublebuffertest() ...\n");
 
   //start cores
-  pthread_t corethreads[CORES];
+  //pthread_t corethreads[CORES];
   int id[CORES];
   for (long i = 0; i < CORES; i++)
   {
     id[i] = i;
-    int returncode = pthread_create(&corethreads[i], NULL, corethreadsdb, &id[i]);
+    int returncode = 0;
+    //returncode = pthread_create(&corethreads[i], NULL, corethreadsdb, &id[i]);
     if (returncode)
     {
       sync_printf("Error %d ... \n", returncode);
@@ -369,7 +335,7 @@ void runstreamingdoublebuffertest()
   // wait
   for (int i = 0; i < CORES; i++)
   {
-    pthread_join(corethreads[i], NULL);
+    //pthread_join(corethreads[i], NULL);
   }
   //pthread_join(nocthread, NULL);
   sync_printf("done: runstreamingdoublebuffertest() ...\n");
@@ -379,11 +345,106 @@ void runstreamingdoublebuffertest()
 //MAIN2
 ///////////////////////////////////////////////////////////////////////////////
 
+// patmos memory initialization
+void patmosinit()
+{
+  sync_printf("in patmosinit()...\n");
+  // map ms's alltxmem and allrxmem to cores' local memory
+  for (int i = 0; i < CORES; i++)
+  { // allocate pointers to each core's membuf array
+    core[i].txmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    core[i].rxmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    for (int j = 0; j < CORES - 1; j++)
+    { // assign membuf addresses from allrx and alltx to rxmem and txmem
+      core[i].txmem[j] = alltxmem[i][j];
+      core[i].rxmem[j] = allrxmem[i][j];
+      for (int m = 0; m < MEMBUF; m++)
+      { // zero the tx and rx membuffer slots
+        // see the comment on 'struct Core'
+        core[i].txmem[j][m] = 0;
+        core[i].rxmem[j][m] = 0;
+      }
+    }
+  }
+}
+
+void patmoscontrol()
+{
+  static int id[CORES];
+  HYPERPERIOD_REGISTER = 0;
+  TDMROUND_REGISTER = 0;
+
+  for (int c = 0; c < CORES; c++)
+    id[c] = c;
+
+  //for (int n = 0; n < 1; n++)
+  //{ //number of runs
+  for (int c = 0; c < CORES; c++)
+  {
+    corethreadhsp(&id[c]);
+  }
+  nocthreadfunc(NULL);
+
+  //}
+  // "signal" to stop the cores
+  // runnoc = false;
+
+  // //start noc test control
+  // runnoc = true;
+  // pthread_t nocthread;
+  // int returncode = pthread_create(&nocthread, NULL, nocthreadfunc, NULL);
+  // if (returncode)
+  // {
+  //   sync_printf("Error %d ... \n", returncode);
+  //   exit(-1);
+  // }
+  sync_printf("runtesttbs(): noc thread created ...\n");
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void memtxprint(int coreid)
+{
+  for (int m = 0; m < MEMBUF; m++)
+    for (int i = 0; i < CORES - 1; i++)
+    {
+      sync_printf("core[coreid:%d].txmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].txmem[i][m]);
+    }
+}
+
+void memrxprint(int coreid)
+{
+  for (int m = 0; m < MEMBUF; m++)
+    for (int i = 0; i < CORES - 1; i++)
+    {
+      sync_printf("core[coreid:%d].rxmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].rxmem[i][m]);
+    }
+}
+
+void memallprint()
+{
+  for (int c = 0; c < CORES; c++)
+  {
+    memtxprint(c);
+    memrxprint(c);
+  }
+}
+
+void printpatmoscounters()
+{
+  sync_printf("HYPERPERIOD_REGISTER = %d\n", HYPERPERIOD_REGISTER);
+  sync_printf("TDMROUND_REGISTER    = %d\n", TDMROUND_REGISTER);
+}
+
 void initsim()
 {
-  pthread_mutex_init(&printf_mutex, NULL);
+  //pthread_mutex_init(&printf_mutex, NULL);
   inittxrxmaps();
-  //initpatmos();
+  patmosinit();
+  //memtxprint(0);
+  //memallprint();
+  printpatmoscounters();
+  patmoscontrol();
+
   //runtesttbs(); // time-based synchronization
   //initpatmos();
   //runhandshakeprotocoltest();
