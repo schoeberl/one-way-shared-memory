@@ -8,7 +8,7 @@
 */
 
 #ifdef USEPTHREAD_FLAG
-  #include <pthread.h>
+#include <pthread.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,8 +17,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include "onewaysim.h"
-
-
 
 //print support so the threads call printf in order
 //static pthread_mutex_t printf_mutex;
@@ -85,9 +83,164 @@ int gettxcoreid(int rxcoreid, int rxslot)
   return txcoreids[rxcoreid][rxslot];
 }
 
+// init patmos (simulated) internals
+Core core[CORES];
+// signal used to stop terminate the cores
+bool runnoc;
+
+// the NoC (same for all comm. patterns)
+void *nocthreadfunc(void *coreid)
+{
+  printf("NoC thread here ...\n");
+
+  for (int m = 0; m < MEMBUF; m++)
+  {                                                      // one word from each to each
+    for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
+    {
+      int txslot = 0;
+      for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
+      {
+        if (txcoreid != rxcoreid) // no tx to itself
+        {
+          // printf("rxcoreid = %d\n", rxcoreid);
+          // printf("txcoreid = %d\n", txcoreid);
+          // printf("txslot   = %d\n", txslot);
+          // printf("getrxslot(txcoreid, rxcoreid, txslot)=%d\n", getrxslot(txcoreid, rxcoreid, txslot));
+          // printf("m        = %d\n", m);
+          core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
+          txslot++;
+        }
+      }
+      printf("\n");
+    }
+    TDMROUND_REGISTER++;
+    sync_printf("nocthread:    TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+    usleep(100); //much slower than the cores on purpose, so they can poll
+  }
+  HYPERPERIOD_REGISTER++;
+  sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
+  usleep(100);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Control code for communication patterns (see the core functions in onewaysim-target.c)
+///////////////////////////////////////////////////////////////////////////////
+
+// patmos memory initialization
+void patmosinit()
+{
+  sync_printf("in patmosinit()...\n");
+  // map ms's alltxmem and allrxmem to cores' local memory
+  for (int i = 0; i < CORES; i++)
+  { // allocate pointers to each core's membuf array
+    core[i].txmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    core[i].rxmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    for (int j = 0; j < CORES - 1; j++)
+    { // assign membuf addresses from allrx and alltx to rxmem and txmem
+      core[i].txmem[j] = alltxmem[i][j];
+      core[i].rxmem[j] = allrxmem[i][j];
+      for (int m = 0; m < MEMBUF; m++)
+      { // zero the tx and rx membuffer slots
+        // see the comment on 'struct Core'
+        core[i].txmem[j][m] = 0;
+        core[i].rxmem[j][m] = 0;
+      }
+    }
+  }
+}
+
+// takes one of the target core test functions
+// i.e.: corethreadtbs, corethreadhsp, corethreades, or corethreadsdb
+void patmoscontrol(void *(*corefp)(void *))
+{
+  static int id[CORES];
+  HYPERPERIOD_REGISTER = 0;
+  TDMROUND_REGISTER = 0;
+
+  for (int c = 0; c < CORES; c++)
+    id[c] = c;
+
+  //number of runs
+  for (int n = 0; n < 1; n++)
+  {
+    for (int c = 0; c < CORES; c++)
+    {
+      (*corefp)(&id[c]);
+    }
+    nocthreadfunc(NULL);
+  }
+
+  // pthread
+  // "signal" to stop the cores
+  // runnoc = false;
+
+  // //start noc test control
+  // runnoc = true;
+  // pthread_t nocthread;
+  // int returncode = pthread_create(&nocthread, NULL, nocthreadfunc, NULL);
+  // if (returncode)
+  // {
+  //   sync_printf("Error %d ... \n", returncode);
+  //   exit(-1);
+  // }
+  sync_printf("runtesttbs(): noc thread created ...\n");
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void memtxprint(int coreid)
+{
+  for (int m = 0; m < MEMBUF; m++)
+    for (int i = 0; i < CORES - 1; i++)
+    {
+      sync_printf("core[coreid:%d].txmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].txmem[i][m]);
+    }
+}
+
+void memrxprint(int coreid)
+{
+  for (int m = 0; m < MEMBUF; m++)
+    for (int i = 0; i < CORES - 1; i++)
+    {
+      sync_printf("core[coreid:%d].rxmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].rxmem[i][m]);
+    }
+}
+
+void memallprint()
+{
+  for (int c = 0; c < CORES; c++)
+  {
+    memtxprint(c);
+    memrxprint(c);
+  }
+}
+
+void printpatmoscounters()
+{
+  sync_printf("HYPERPERIOD_REGISTER = %d\n", HYPERPERIOD_REGISTER);
+  sync_printf("TDMROUND_REGISTER    = %d\n", TDMROUND_REGISTER);
+}
+
+void initsim()
+{
+  inittxrxmaps();
+  //memtxprint(0);
+  //memallprint();
+  
+  patmosinit();
+  patmoscontrol(&corethreadtbs);
+  patmosinit();
+  patmoscontrol(&corethreadhsp);
+  patmosinit();
+  patmoscontrol(&corethreades);
+  patmosinit();
+  patmoscontrol(&corethreadsdb);
+  printpatmoscounters();
+}
+
 //////////////////////////////////////////////////////////////////
+//should be updated 
 //////////////////////////////////////////////////////////////////
-// MAIN1 start
+// MAIN1 begin
 void *coredo(void *vargp)
 {
   int id = *((int *)vargp);
@@ -158,298 +311,6 @@ int main1()
   return 0;
 }
 
-// MAIN1 STOP
+// MAIN1 end
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-
-// init patmos (simulated) internals
-Core core[CORES];
-// signal used to stop terminate the cores
-bool runnoc;
-
-// the NoC (same for all comm. patterns)
-void *nocthreadfunc(void *coreid)
-{
-  printf("NoC thread here ...\n");
-
-  for (int m = 0; m < MEMBUF; m++)
-  {                                                      // one word from each to each
-    for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
-    {
-      int txslot = 0;
-      for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
-      {
-        if (txcoreid != rxcoreid) // no tx to itself
-        {
-          // printf("rxcoreid = %d\n", rxcoreid);
-          // printf("txcoreid = %d\n", txcoreid);
-          // printf("txslot   = %d\n", txslot);
-          // printf("getrxslot(txcoreid, rxcoreid, txslot)=%d\n", getrxslot(txcoreid, rxcoreid, txslot));
-          // printf("m        = %d\n", m);
-          core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
-          txslot++;
-        }
-      }
-      printf("\n");
-    }
-    TDMROUND_REGISTER++;
-    sync_printf("nocthread:    TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
-    usleep(100); //much slower than the cores on purpose, so they can poll
-  }
-  HYPERPERIOD_REGISTER++;
-  sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
-  usleep(100);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERNS///////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-//a noc test controller ('nocthread') will drive the Patmos registers and inject
-//  test data for the cores to use
-///////////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
-///////////////////////////////////////////////////////////////////////////////
-
-void runtesttbs()
-{
-  sync_printf("start: runtesttbs() ...\n");
-  //start cores
-  // Just to make it clear that those are accessed by threads
-  int id[CORES];
-  //pthread_t corethreads[CORES];
-  for (long i = 0; i < CORES; i++)
-  {
-    id[i] = i;
-    int returncode = 0;
-    //returncode = pthread_create(&corethreads[i], NULL, corethreadtbs, &id[i]);
-    if (returncode)
-    {
-      sync_printf("Error %d ... \n", returncode);
-      exit(-1);
-    }
-    sync_printf("runtesttbs(): core %ld created ...\n", i);
-  }
-
-  // wait
-  for (int i = 0; i < CORES; i++)
-  {
-    //pthread_join(corethreads[i], NULL);
-  }
-  //pthread_join(nocthread, NULL);
-  sync_printf("done: runtesttbs() ...\n");
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Handshaking Protocol
-///////////////////////////////////////////////////////////////////////////////
-
-void runhandshakeprotocoltest()
-{
-  sync_printf("start: runtesthsp() ...\n");
-
-  //start cores
-  int id[CORES];
-  //pthread_t corethreads[CORES];
-
-  for (long i = 0; i < CORES; i++)
-  {
-    id[i] = i;
-    int returncode = 0;
-    //returncode = pthread_create(&corethreads[i], NULL, corethreadhsp, &id[i]);
-    if (returncode)
-    {
-      sync_printf("Error %d ... \n", returncode);
-      exit(-1);
-    }
-    sync_printf("runtesthsp(): core %ld created ...\n", i);
-  }
-
-  // wait
-  for (int i = 0; i < CORES; i++)
-  {
-    //pthread_join(corethreads[i], NULL);
-  }
-  //pthread_join(nocthread, NULL);
-  sync_printf("done: runtesthsp() ...\n");
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Exchange of state
-///////////////////////////////////////////////////////////////////////////////
-
-void runexchangestatetest()
-{
-  sync_printf("start: runexchangestatetest() ...\n");
-
-  //start cores
-  //pthread_t corethreads[CORES];
-  int id[CORES];
-  for (long i = 0; i < CORES; i++)
-  {
-    id[i] = i;
-    int returncode = 0;
-    //returncode = pthread_create(&corethreads[i], NULL, corethreades, &id[i]);
-    if (returncode)
-    {
-      sync_printf("Error %d ... \n", returncode);
-      exit(-1);
-    }
-    sync_printf("runexchangestatetest(): core %ld created ...\n", i);
-  }
-
-  // wait
-  for (int i = 0; i < CORES; i++)
-  {
-    //pthread_join(corethreads[i], NULL);
-  }
-  //pthread_join(nocthread, NULL);
-  sync_printf("done: runexchangestatetest() ...\n");
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
-///////////////////////////////////////////////////////////////////////////////
-
-void runstreamingdoublebuffertest()
-{
-  sync_printf("start: runstreamingdoublebuffertest() ...\n");
-
-  //start cores
-  //pthread_t corethreads[CORES];
-  int id[CORES];
-  for (long i = 0; i < CORES; i++)
-  {
-    id[i] = i;
-    int returncode = 0;
-    //returncode = pthread_create(&corethreads[i], NULL, corethreadsdb, &id[i]);
-    if (returncode)
-    {
-      sync_printf("Error %d ... \n", returncode);
-      exit(-1);
-    }
-    sync_printf("runstreamingdoublebuffertest(): core %ld created ...\n", i);
-  }
-
-  // wait
-  for (int i = 0; i < CORES; i++)
-  {
-    //pthread_join(corethreads[i], NULL);
-  }
-  //pthread_join(nocthread, NULL);
-  sync_printf("done: runstreamingdoublebuffertest() ...\n");
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//MAIN2
-///////////////////////////////////////////////////////////////////////////////
-
-// patmos memory initialization
-void patmosinit()
-{
-  sync_printf("in patmosinit()...\n");
-  // map ms's alltxmem and allrxmem to cores' local memory
-  for (int i = 0; i < CORES; i++)
-  { // allocate pointers to each core's membuf array
-    core[i].txmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    core[i].rxmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    for (int j = 0; j < CORES - 1; j++)
-    { // assign membuf addresses from allrx and alltx to rxmem and txmem
-      core[i].txmem[j] = alltxmem[i][j];
-      core[i].rxmem[j] = allrxmem[i][j];
-      for (int m = 0; m < MEMBUF; m++)
-      { // zero the tx and rx membuffer slots
-        // see the comment on 'struct Core'
-        core[i].txmem[j][m] = 0;
-        core[i].rxmem[j][m] = 0;
-      }
-    }
-  }
-}
-
-void patmoscontrol()
-{
-  static int id[CORES];
-  HYPERPERIOD_REGISTER = 0;
-  TDMROUND_REGISTER = 0;
-
-  for (int c = 0; c < CORES; c++)
-    id[c] = c;
-
-  //for (int n = 0; n < 1; n++)
-  //{ //number of runs
-  for (int c = 0; c < CORES; c++)
-  {
-    corethreadhsp(&id[c]);
-  }
-  nocthreadfunc(NULL);
-
-  //}
-  // "signal" to stop the cores
-  // runnoc = false;
-
-  // //start noc test control
-  // runnoc = true;
-  // pthread_t nocthread;
-  // int returncode = pthread_create(&nocthread, NULL, nocthreadfunc, NULL);
-  // if (returncode)
-  // {
-  //   sync_printf("Error %d ... \n", returncode);
-  //   exit(-1);
-  // }
-  sync_printf("runtesttbs(): noc thread created ...\n");
-}
-
-///////////////////////////////////////////////////////////////////////////////
-void memtxprint(int coreid)
-{
-  for (int m = 0; m < MEMBUF; m++)
-    for (int i = 0; i < CORES - 1; i++)
-    {
-      sync_printf("core[coreid:%d].txmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].txmem[i][m]);
-    }
-}
-
-void memrxprint(int coreid)
-{
-  for (int m = 0; m < MEMBUF; m++)
-    for (int i = 0; i < CORES - 1; i++)
-    {
-      sync_printf("core[coreid:%d].rxmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].rxmem[i][m]);
-    }
-}
-
-void memallprint()
-{
-  for (int c = 0; c < CORES; c++)
-  {
-    memtxprint(c);
-    memrxprint(c);
-  }
-}
-
-void printpatmoscounters()
-{
-  sync_printf("HYPERPERIOD_REGISTER = %d\n", HYPERPERIOD_REGISTER);
-  sync_printf("TDMROUND_REGISTER    = %d\n", TDMROUND_REGISTER);
-}
-
-void initsim()
-{
-  //pthread_mutex_init(&printf_mutex, NULL);
-  inittxrxmaps();
-  patmosinit();
-  //memtxprint(0);
-  //memallprint();
-  printpatmoscounters();
-  patmoscontrol();
-
-  //runtesttbs(); // time-based synchronization
-  //initpatmos();
-  //runhandshakeprotocoltest();
-  //initpatmos();
-  //runexchangestatetest();
-  //initpatmos();
-  //runstreamingdoublebuffertest();
-}
