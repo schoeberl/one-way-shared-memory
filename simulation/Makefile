@@ -18,6 +18,7 @@ debug:
 
 onpatmos:
 	@echo "put this in the patmos makefile: BUILDDIR/onewaysim-target.elf: onewaysim.c onewaysim.h"
+	cd $(PATMOSHOME)/../aegean/ && $(MAKE) config
 	rm -f ~/t-crest/patmos/c/onewaysim-target.c	
 	rm -f ~/t-crest/patmos/c/onewaysim.h	
 	rm -f ~/t-crest/patmos/c/onewaysim.c	

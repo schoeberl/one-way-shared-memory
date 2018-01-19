@@ -9,8 +9,8 @@
   License: Simplified BSD
 */
 
-// how many messages the printfbuffer can store
-#define SYNCPRINTBYF 200
+// how many messages the printfbuffer can store for each core
+#define SYNCPRINTBUF 50
 
 // NoC configuration
 #define CORES 4
@@ -83,21 +83,23 @@ typedef struct buffer_t
   unsigned long data[MEMBUF * CORES];
 } buffer_t;
 
-// shared (will not work on target yet)
 extern bool runnoc;
+void noccontrol();
 
 // functions in the target and simulator
-int sync_printf(const char *format, ...);
+int sync_printf(int, const char *format, ...);
 void sync_printall();
 void corethreadtbs(void *coreid);
-void *corethreadhsp(void *coreid);
-void *corethreades(void *coreid);
-void *corethreadsdb(void *coreid);
-
-void initsim();
+void corethreadhsp(void *coreid);
+void corethreades(void *coreid);
+void corethreadsdb(void *coreid);
 
 void memtxprint(int coreid);
 void memrxprint(int coreid);
 void memallprint();
+
+void inittxrxmaps();
+int getrxslot(int txcoreid, int rxcoreid, int txslot);
+int gettxcoreid(int rxcoreid, int rxslot);
 
 #endif
