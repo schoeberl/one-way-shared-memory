@@ -151,18 +151,34 @@ void patmosinit()
 
 // takes one of the target core test functions
 // i.e.: corethreadtbs, corethreadhsp, corethreades, or corethreadsdb
+//   and uses that
 void patmoscontrol(void *(*corefp)(void *))
 {
   static int id[CORES];
   HYPERPERIOD_REGISTER = 0;
   TDMROUND_REGISTER = 0;
-
+  
+  // sequential core ids
   for (int c = 0; c < CORES; c++)
     id[c] = c;
 
   //number of runs
   for (int n = 0; n < 1; n++)
   {
+    // shuffle the sequence which the cores functions are executed
+    // comment in/out the next two lines if you want the cores to run in sequence 0,1,2...
+    //for (int i = 0; i < 0; i++)
+    for (int i = 0; i < 8; i++)
+    {
+      int ii = rand() % CORES;
+      int jj = rand() % CORES;
+      if (ii == jj)
+        continue;
+      //sync_printf("ii=%d jj=%d\n", ii, jj);
+      int tempid = id[ii];
+      id[ii] = id[jj];
+      id[jj] = tempid;
+    }
     for (int c = 0; c < CORES; c++)
     {
       (*corefp)(&id[c]);
@@ -225,7 +241,8 @@ void initsim()
   inittxrxmaps();
   //memtxprint(0);
   //memallprint();
-  
+
+  // probably best to comment some of them out when working/debugging
   patmosinit();
   patmoscontrol(&corethreadtbs);
   patmosinit();
@@ -238,7 +255,7 @@ void initsim()
 }
 
 //////////////////////////////////////////////////////////////////
-//should be updated 
+//should be updated
 //////////////////////////////////////////////////////////////////
 // MAIN1 begin
 void *coredo(void *vargp)
