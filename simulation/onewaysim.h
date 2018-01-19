@@ -9,6 +9,9 @@
   License: Simplified BSD
 */
 
+// how many messages the printfbuffer can store
+#define SYNCPRINTBYF 200
+
 // NoC configuration
 #define CORES 4
 // one core configuration
@@ -85,6 +88,7 @@ extern bool runnoc;
 
 // functions in the target and simulator
 int sync_printf(const char *format, ...);
+void sync_printall();
 void corethreadtbs(void *coreid);
 void *corethreadhsp(void *coreid);
 void *corethreades(void *coreid);

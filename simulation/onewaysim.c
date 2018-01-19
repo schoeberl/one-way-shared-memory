@@ -224,21 +224,33 @@ void initsim()
   //patmoscontrol(&corethreadsdb);
 
   printpatmoscounters();
+  printf("from sync_printall():\n");
+  sync_printall();
 }
 
-//print support so the threads call printf in order
-//static pthread_mutex_t printf_mutex;
+//print support so the threads on all cores can use printf 
+//  call sync_printall to print them after the most
+//  important code has run. 
+//  do not use sync_printf when running cycle accurate code (e.g. wcet)
+static char strings[SYNCPRINTBYF][100];
+static int mi = 0;
 int sync_printf(const char *format, ...)
 {
   va_list args;
   va_start(args, format);
-
-  //pthread_mutex_lock(&printf_mutex);
-  vprintf(format, args);
-  //pthread_mutex_unlock(&printf_mutex);
-
+  if (mi < SYNCPRINTBYF)
+    vsprintf(&strings[mi][0], format, args);
   va_end(args);
+  mi++;
 }
+
+// call this from 0 when done
+void sync_printall(){
+  for(int i = 0; i < mi; i++)
+    printf("%00d: %s", i, strings[i]);
+}
+
+
 
 //////////////////////////////////////////////////////////////////
 //should be updated

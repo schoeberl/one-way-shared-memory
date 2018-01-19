@@ -38,8 +38,8 @@ void corethreadtbs(void *coreid)
 {
  
   int cid = *((int *)coreid);
-  *((int *)coreid) = *((int *)coreid) + 1; // see if the core runs
-  //printf("in corethreadtbs(%d)...\n", cid); 
+  
+  sync_printf("in corethreadtbs(%d)...\n", cid); 
  
   int step = 0;
   unsigned long tdmround = 0xFFFFFFFF;
