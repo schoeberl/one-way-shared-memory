@@ -14,6 +14,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include <machine/patmos.h>
 #include "onewaysim.h"
 
 unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
@@ -23,25 +25,38 @@ unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
 
+int trigger(int cid){
+  // table 3.3 in the patmos manual
+  volatile _IODEV int *io_ptr = (volatile _IODEV int *) (PATMOS_IO_TIMER+4);
+  int val = *io_ptr;
+  printf("Trigger on core %d: Cycles = %d\n", cid, val);
+}
+
 // the cores
 // detect changes in HYPERPERIOD_REGISTER and TDMROUND_REGISTER
-void *corethreadtbs(void *coreid)
+void corethreadtbs(void *coreid)
 {
+ 
   int cid = *((int *)coreid);
-  static int step = 0;
-  static unsigned long tdmround = 0xFFFFFFFF;
-  static unsigned long hyperperiod = 0xFFFFFFFF;
+  *((int *)coreid) = *((int *)coreid) + 1; // see if the core runs
+  //printf("in corethreadtbs(%d)...\n", cid); 
+ 
+  int step = 0;
+  unsigned long tdmround = 0xFFFFFFFF;
+  unsigned long hyperperiod = 0xFFFFFFFF;
 
   // the cores are aware of the global cycle times for time-based-synchronization
   // the cores print their output after the cycle count changes are (simultaneously) detected
   if (tdmround != TDMROUND_REGISTER)
   {
-    sync_printf("Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+    //trigger(cid);
+    //sync_printf("Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);  
     tdmround = TDMROUND_REGISTER;
   }
   if (hyperperiod != HYPERPERIOD_REGISTER)
   {
-    sync_printf("Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+    //trigger(cid);
+    //sync_printf("Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
     hyperperiod = HYPERPERIOD_REGISTER;
   }
   step++;

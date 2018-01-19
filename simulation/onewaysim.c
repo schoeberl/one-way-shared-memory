@@ -16,21 +16,10 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include <machine/patmos.h>
+#include "libcorethread/corethread.h"
 #include "onewaysim.h"
-
-//print support so the threads call printf in order
-//static pthread_mutex_t printf_mutex;
-int sync_printf(const char *format, ...)
-{
-  va_list args;
-  va_start(args, format);
-
-  //pthread_mutex_lock(&printf_mutex);
-  vprintf(format, args);
-  //pthread_mutex_unlock(&printf_mutex);
-
-  va_end(args);
-}
 
 //target tables
 //information on where to send tx slots
@@ -83,53 +72,21 @@ int gettxcoreid(int rxcoreid, int rxslot)
   return txcoreids[rxcoreid][rxslot];
 }
 
-// init patmos (simulated) internals
-Core core[CORES];
-// signal used to stop terminate the cores
-bool runnoc;
-
-// the NoC (same for all comm. patterns)
-void *nocthreadfunc(void *coreid)
-{
-  printf("NoC thread here ...\n");
-
-  for (int m = 0; m < MEMBUF; m++)
-  {                                                      // one word from each to each
-    for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
-    {
-      int txslot = 0;
-      for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
-      {
-        if (txcoreid != rxcoreid) // no tx to itself
-        {
-          // printf("rxcoreid = %d\n", rxcoreid);
-          // printf("txcoreid = %d\n", txcoreid);
-          // printf("txslot   = %d\n", txslot);
-          // printf("getrxslot(txcoreid, rxcoreid, txslot)=%d\n", getrxslot(txcoreid, rxcoreid, txslot));
-          // printf("m        = %d\n", m);
-          core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
-          txslot++;
-        }
-      }
-      printf("\n");
-    }
-    TDMROUND_REGISTER++;
-    sync_printf("nocthread:    TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
-    usleep(100); //much slower than the cores on purpose, so they can poll
-  }
-  HYPERPERIOD_REGISTER++;
-  sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
-  usleep(100);
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // Control code for communication patterns (see the core functions in onewaysim-target.c)
 ///////////////////////////////////////////////////////////////////////////////
+
+// init patmos (simulated) internals
+Core core[CORES];
+corethread_t core_id[CORES];
+// signal used to stop terminate the cores
+bool runnoc;
 
 // patmos memory initialization
 void patmosinit()
 {
   sync_printf("in patmosinit()...\n");
+  runnoc = true;
   // map ms's alltxmem and allrxmem to cores' local memory
   for (int i = 0; i < CORES; i++)
   { // allocate pointers to each core's membuf array
@@ -157,49 +114,63 @@ void patmoscontrol(void *(*corefp)(void *))
   static int id[CORES];
   HYPERPERIOD_REGISTER = 0;
   TDMROUND_REGISTER = 0;
-  
+
   // sequential core ids
-  for (int c = 0; c < CORES; c++)
-    id[c] = c;
-
-  //number of runs
-  for (int n = 0; n < 1; n++)
-  {
-    // shuffle the sequence which the cores functions are executed
-    // comment in/out the next two lines if you want the cores to run in sequence 0,1,2...
-    //for (int i = 0; i < 0; i++)
-    for (int i = 0; i < 8; i++)
-    {
-      int ii = rand() % CORES;
-      int jj = rand() % CORES;
-      if (ii == jj)
-        continue;
-      //sync_printf("ii=%d jj=%d\n", ii, jj);
-      int tempid = id[ii];
-      id[ii] = id[jj];
-      id[jj] = tempid;
-    }
-    for (int c = 0; c < CORES; c++)
-    {
-      (*corefp)(&id[c]);
-    }
-    nocthreadfunc(NULL);
-  }
-
-  // pthread
-  // "signal" to stop the cores
-  // runnoc = false;
-
-  // //start noc test control
-  // runnoc = true;
-  // pthread_t nocthread;
-  // int returncode = pthread_create(&nocthread, NULL, nocthreadfunc, NULL);
-  // if (returncode)
+  // for (int c = 0; c < CORES; c++)
   // {
-  //   sync_printf("Error %d ... \n", returncode);
-  //   exit(-1);
+  //   id[c] = c;
+  //   core_id[c] = c; // which core it will run on
+  //   corethread_create(&core_id[c], corethreadtbs, (void *)&id[c]);
   // }
-  sync_printf("runtesttbs(): noc thread created ...\n");
+  int mycoreid = 1;
+  corethread_t worker_id = 1;
+  corethread_create(&worker_id, &corethreadtbs, (void *)&mycoreid);
+
+  for (int hp = 0; hp < 0; hp++)
+  {
+
+    for (int m = 0; m < MEMBUF; m++)
+    {                                                      // one word from each to each
+      for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
+      {
+        int txslot = 0;
+        for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
+        {
+          if (txcoreid != rxcoreid) // no tx to itself
+          {
+            // printf("rxcoreid = %d\n", rxcoreid);
+            // printf("txcoreid = %d\n", txcoreid);
+            // printf("txslot   = %d\n", txslot);
+            // printf("getrxslot(txcoreid, rxcoreid, txslot)=%d\n", getrxslot(txcoreid, rxcoreid, txslot));
+            // printf("m        = %d\n", m);
+            core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
+            txslot++;
+          }
+        }
+        //printf("\n");
+      } // tdmround ends
+      TDMROUND_REGISTER++;
+      sync_printf("nocthread:    TDMROUND_REGISTER=%lu\n", TDMROUND_REGISTER);
+      usleep(100); //much slower than the cores on purpose, so they can poll
+    }
+    HYPERPERIOD_REGISTER++;
+    sync_printf("nocthread: HYPERPERIOD_REGISTER=%lu\n", HYPERPERIOD_REGISTER);
+    usleep(100);
+  } // hyperperiod ends
+
+  sync_printf("waitng for core  1  to join ...\n");
+  int *res;
+  corethread_join(worker_id, (void *)&res);
+  sync_printf("core thread 1 joined: coreid=%d\n", mycoreid);
+
+  //sync_printf("waitng for core threads to join ...\n");
+  // for (int c = 0; c < CORES; c++)
+  // {
+  //   int *res;
+  //   corethread_join(core_id[c], (void *)&res);
+  //   sync_printf("core thread %d joined: res=%d\n", c, *res);
+  // }
+  sync_printf("patmoscontrol() done...\n");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -245,13 +216,28 @@ void initsim()
   // probably best to comment some of them out when working/debugging
   patmosinit();
   patmoscontrol(&corethreadtbs);
-  patmosinit();
-  patmoscontrol(&corethreadhsp);
-  patmosinit();
-  patmoscontrol(&corethreades);
-  patmosinit();
-  patmoscontrol(&corethreadsdb);
+  //patmosinit();
+  //patmoscontrol(&corethreadhsp);
+  //patmosinit();
+  //patmoscontrol(&corethreades);
+  //patmosinit();
+  //patmoscontrol(&corethreadsdb);
+
   printpatmoscounters();
+}
+
+//print support so the threads call printf in order
+//static pthread_mutex_t printf_mutex;
+int sync_printf(const char *format, ...)
+{
+  va_list args;
+  va_start(args, format);
+
+  //pthread_mutex_lock(&printf_mutex);
+  vprintf(format, args);
+  //pthread_mutex_unlock(&printf_mutex);
+
+  va_end(args);
 }
 
 //////////////////////////////////////////////////////////////////

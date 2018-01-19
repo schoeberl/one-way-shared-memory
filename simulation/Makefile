@@ -25,7 +25,7 @@ onpatmos:
 	cp onewaysim.h ~/t-crest/patmos/c/
 	cp onewaysim.c ~/t-crest/patmos/c/
 	#cd ~/t-crest/patmos/ && $(MAKE) BOOTAPP=bootable-bootloader APP=onewaymem tools comp gen synth config download
-	cd ~/t-crest/patmos/ && $(MAKE) APP=onewaysim-target comp config download
+	cd ~/t-crest/patmos/ && $(MAKE) APP=onewaysim-target comp download
 	rm -f ~/t-crest/patmos/c/onewaysim-target.c	
 	rm -f ~/t-crest/patmos/c/onewaysim.h	
 	rm -f ~/t-crest/patmos/c/onewaysim.c

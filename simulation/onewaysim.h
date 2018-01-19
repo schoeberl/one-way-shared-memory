@@ -85,7 +85,7 @@ extern bool runnoc;
 
 // functions in the target and simulator
 int sync_printf(const char *format, ...);
-void *corethreadtbs(void *coreid);
+void corethreadtbs(void *coreid);
 void *corethreadhsp(void *coreid);
 void *corethreades(void *coreid);
 void *corethreadsdb(void *coreid);
