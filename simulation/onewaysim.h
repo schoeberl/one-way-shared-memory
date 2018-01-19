@@ -83,7 +83,8 @@ typedef struct buffer_t
   unsigned long data[MEMBUF * CORES];
 } buffer_t;
 
-extern bool runnoc;
+//extern bool runnoc;
+void nocdone();
 void noccontrol();
 
 // functions in the target and simulator

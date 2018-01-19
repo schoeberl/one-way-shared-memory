@@ -132,10 +132,10 @@ void sync_printall()
   printf("in sync_printall()...\n");
   for (int c = 0; c < CORES; c++)
   {
-    for (int i = 0; i < mi[c] - 1; i++)
+    for (int i = 0; i < mi[c]; i++)
     {
       usleep(1000);
-      printf("[core %d]%2d: %s", c, i, strings[c][i]);
+      printf("[core %d][time %lu] %2d: %s", c, timestamps[c][i], i, strings[c][i]);
     }
   }
   printf("leaving sync_printall()...\n");
