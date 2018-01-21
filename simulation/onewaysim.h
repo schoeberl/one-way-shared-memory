@@ -88,7 +88,8 @@ void nocdone();
 void noccontrol();
 
 // functions in the target and simulator
-int sync_printf(int, const char *format, ...);
+void sync_printf(int, const char *format, ...);
+void info_printf(const char *format, ...);
 void sync_printall();
 void corethreadtbs(void *coreid);
 void corethreadhsp(void *coreid);

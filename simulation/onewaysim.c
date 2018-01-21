@@ -106,15 +106,17 @@ void printpatmoscounters()
 //  call sync_printall to print them after the most
 //  important code has run.
 //  don't not use sync_printf when running cycle accurate code (e.g. wcet)
-static char strings[CORES][SYNCPRINTBUF][80];
-static unsigned long timestamps[CORES][SYNCPRINTBUF];
-static int mi[CORES];
+static char strings[CORES + 1][SYNCPRINTBUF][80];
+// clock cycles
+static unsigned long timestamps[CORES + 1][SYNCPRINTBUF];
+// message counter per core
+static int mi[CORES + 1];
 // call it with the core id so there are no race conditions
-int sync_printf(int cid, const char *format, ...)
+void sync_printf(int cid, const char *format, ...)
 {
   if (mi[cid] < SYNCPRINTBUF)
   {
-    volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf002000c; // timer low word
+    volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
     int val = *io_ptr;
     timestamps[cid][mi[cid]] = (unsigned long)val;
     va_list args;
@@ -123,20 +125,76 @@ int sync_printf(int cid, const char *format, ...)
     va_end(args);
     mi[cid]++;
   }
-  return mi[cid];
 }
+
+// an extra print buffer for info and end of sim stuff
+void info_printf(const char *format, ...)
+{
+  // cid is equal to the number of CORES (i.e., the top buffer)
+  if (mi[CORES] < SYNCPRINTBUF)
+  {
+    volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
+    int val = *io_ptr;
+    timestamps[CORES][mi[CORES]] = (unsigned long)val;
+    va_list args;
+    va_start(args, format);
+    vsprintf(&strings[CORES][mi[CORES]][0], format, args);
+    va_end(args);
+    mi[CORES]++;
+  }
+}
+
+// print minimum timestamp. go over the [core][msg] matrix and find the lowest timestamp
+// then print that message. keep a current msg index for each counter. increase it
+//   for the message that has just been printed.
 
 // call this from 0 when done
 void sync_printall()
 {
   printf("in sync_printall()...\n");
-  for (int c = 0; c < CORES; c++)
+  bool print = true;
+  int closestcoreid = 0;
+  int closestmsgid = 0;
+  int minmark[CORES + 1]; // keep track of messages printed for each core
+
+  for (int c = 0; c < CORES + 1; c++)
+    minmark[c] = 0;
+
+  while (print)
   {
-    for (int i = 0; i < mi[c]; i++)
+    unsigned long smallest = 0xffffffff;
+    for (int c = 0; c < CORES + 1; c++)
     {
-      usleep(1000);
-      printf("[core %d][time %lu] %2d: %s", c, timestamps[c][i], i, strings[c][i]);
+      if (minmark[c] < mi[c])
+      {
+        if (timestamps[c][minmark[c]] <= smallest)
+        {
+          closestcoreid = c;                    // candidate
+          smallest = timestamps[c][minmark[c]]; // new smallest
+        }
+      }
+    }
+    if (closestcoreid == CORES) // info core?
+      printf("[cycle=%10lu, info=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], 0,
+             minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
+    else // other cores
+      printf("[cycle=%10lu, core=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], closestcoreid,
+             minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
+
+    usleep(1000); // perhaps not needed
+
+    minmark[closestcoreid]++;
+    print = false;
+    for (int c = 0; c < CORES + 1; c++)
+    {
+      // are we done?
+      if (minmark[c] < mi[c])
+      {
+        print = true;
+        break;
+      }
     }
   }
+
   printf("leaving sync_printall()...\n");
 }

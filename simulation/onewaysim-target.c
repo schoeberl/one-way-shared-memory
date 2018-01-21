@@ -29,9 +29,10 @@ unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 // init patmos (simulated) internals
 Core core[CORES];
 // signal used to stop terminate the cores
-static bool runnoc;
-static int id[CORES-1];
-static corethread_t worker_id[CORES-1];
+// core0 is special as it runs on the main thread
+static const int corecntmax = 10000;
+static int coreid[CORES];
+static corethread_t corethread[CORES];
 
 void nocmem()
 {
@@ -56,42 +57,31 @@ void nocmem()
 
 // patmos memory initialization
 // function pointer to one of the test cases
-void nocinit(void (*corefp)(void *))
+void nocinit()
 {
-  sync_printf(0, "in nocinit()...\n");
+  info_printf("in nocinit()...\n");
   inittxrxmaps();
-
-
 
   nocmem();
 
   // init signals and counters
-  runnoc = true;
   HYPERPERIOD_REGISTER = 0;
   TDMROUND_REGISTER = 0;
-
-  // create the *other* core threads
-  // call noccontrol first
-  //noccontrol();
-  // we are core 0
-  for (int c = 0; c < CORES-1; c++)
+  for (int c = 0; c < CORES; c++)
   {
-    id[c] = c+1;
-    worker_id[c] = c+1; // which core it will run on
-  }
-  for (int c = 0; c < CORES-1; c++)
-  {
-    corethread_create(&worker_id[c], corethreadtbs, (void *)&id[c]);
+    coreid[c] = c;
+    corethread[c] = c; // which core it will run on
   }
 
-  // now go and do our job as core 0. It will call noccontrol from now on.
-  static int core0id = 0;
-  corethreadtbs(&core0id);
+  // start the "slave" cores
+  for (int c = 1; c < CORES; c++)
+  {
+    corethread_create(&corethread[c], &corethreadtbs, (void *)&coreid[c]);
+  }
 }
 
-// called repeatedly from core 0 as a workaround until more threads can be created
-// when running with real HW on real HW then this should *not* be called
-
+// called repeatedly from core 0
+// this can (and will) sometimes be done by real HW instead
 void noccontrol()
 {
   sync_printf(0, "in noccontrol()...\n");
@@ -122,46 +112,30 @@ void noccontrol()
     } // tdmround ends
     TDMROUND_REGISTER++;
     sync_printf(0, "TDMROUND_REGISTER = %lu\n", TDMROUND_REGISTER);
-    usleep(1000); //much slower than the cores on purpose, so they can poll
+    //usleep(100000); //much slower than the cores on purpose, so they can poll
   }
   HYPERPERIOD_REGISTER++;
   sync_printf(0, "HYPERPERIOD_REGISTER = %lu\n", HYPERPERIOD_REGISTER);
-  usleep(1000);
+  //usleep(100000);
   // current hyperperiod ends
 
   TDMROUND_REGISTER = 0;
 
   hyperperiod++;
-  if (hyperperiod >= hyperperiodstorun){
-    runnoc = false;
-    //nocdone();
-  }
-
   sync_printf(0, "leaving noccontrol()...\n");
 }
 
 void nocdone()
 {
-  //sync_printf(0, "waitng for cores to join ...\n");
-  printf("waitng for cores to join ...\n");
-  int *res[CORES-1];
-  // corethread_join(worker_id1, (void *)&res);
-  // sync_printf("core thread 1 joined: coreid=%d\n", mycoreid1);
-  // corethread_join(worker_id2, (void *)&res);
-  // sync_printf("core thread 2 joined: coreid=%d\n", mycoreid2);
-
-  // core 0 is us, so we have "joined"
-  //sync_printf(0, "core thread 0 \"joined\"...\n", id[0]);
-  printf("core thread 0 \"joined\"...\n");
-int* result;
+  info_printf("waiting for cores to join ...\n");
+  int *retval;
   // now let the others join
-  for (int c = 0; c < CORES-1; c++)
+  for (int c = 1; c < CORES; c++)
   {
-    printf("core thread %d to join...\n", id[c]);
+    info_printf("core thread %d to join...\n", c);
     // the cores *should* join here...
-    corethread_join(worker_id[c], (void *)&result);
-    //sync_printf(0, "core thread %d joined: coreid=%d\n", id[c]);
-    printf("core thread %d joined...\n", id[c]);
+    corethread_join(corethread[c], (void **)&retval);
+    info_printf("core thread %d joined: coreid=%d\n", c);
   }
 }
 
@@ -174,7 +148,8 @@ int tbstrigger(int cid)
   // table 3.3 in the patmos manual
   volatile _IODEV int *io_ptr = (volatile _IODEV int *)(PATMOS_IO_TIMER + 4);
   int val = *io_ptr;
-  sync_printf(cid, "Time-based trigger on core %d: Cycles = %d\n", cid, val);
+  sync_printf(cid, "-->Time-synced trigger on core %d: Cycles = %d\n", cid, val);
+  sync_printf(cid, "-->HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER = %lu\n", HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
   return val;
 }
 
@@ -186,42 +161,45 @@ void corethreadtbs(void *coreid)
   sync_printf(cid, "in corethreadtbs(%d)...\n", cid);
   unsigned long tdmround = 0xFFFFFFFF;
   unsigned long hyperperiod = 0xFFFFFFFF;
-
-  while (runnoc)
+  int corecnt = corecntmax;
+  // all cores except core 0
+  while (corecnt != 0)
   {
-    sync_printf(cid, "while: in corethreadtbs(%d)...\n", cid);
+    //sync_printf(cid, "while: in corethreadtbs(%d)...\n", cid);
     // the cores are aware of the global cycle times for time-based-synchronization
     // the cores print their output after the cycle count changes are (simultaneously) detected
     if (tdmround != TDMROUND_REGISTER)
     {
-      //tbstrigger(cid);
-      sync_printf(cid,"Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+      tbstrigger(cid);
+      //sync_printf(cid, "Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
       tdmround = TDMROUND_REGISTER;
     }
+
     if (hyperperiod != HYPERPERIOD_REGISTER)
     {
-      //tbstrigger(cid);
-      sync_printf(cid,"Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+      tbstrigger(cid);
+      //sync_printf(cid, "Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
       hyperperiod = HYPERPERIOD_REGISTER;
     }
 
-    // call patmossimcontrol if we are core 0
-    // not to be called when running on generated HW as it will take care of the routing
-    //if (cid == -1)
-    if (cid == 0){
-      noccontrol();
-    }
-    usleep(10000);
-  }
-  sync_printf(cid, "leaving corethreadtbs(%d)...\n", cid);
+    if (cid > 0)
+      usleep(10);
 
-  // core 0 is not a workerthread type
-  if (cid > 0)
-  {
-    int ret = 0;
-    corethread_exit(&ret);
+    if (cid == 0)
+      noccontrol();
+
+    corecnt--;
   }
-  return;
+
+  // while ((cid == 0) && runcore0)
+  // {
+  //   if (core0cnt == 1000)
+  //     runcore0 = false;
+
+  //   core0cnt++;
+  // }
+
+  sync_printf(cid, "leaving corethreadtbs(%d)...core0cnt %d\n", cid, corecnt);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -410,22 +388,18 @@ void corethreadsdb(void *coreid)
 // we are core 0
 int main(int argc, char *argv[])
 {
-  //main1();
-
   printf("***********************************************************\n");
   printf("onewaysim-target main(): ******************************************\n");
   printf("***********************************************************\n");
-  // we can printf on this thread,
-  //   but use sync_printf after this point to get a more correct picture across all threads
-
-  //&corethreadtbs, &corethreadhsp, &corethreades, &corethreadsdb
-  nocinit(&corethreadtbs);
-  printf("after nocinit\n");
-
-  // wait for the rest of the core threads
-  //nocdone();
-  printf("from sync_printall():\n");
+  //start the other cores
+  nocinit();
+  // "start" ourself (core 0)
+  corethreadtbs(&coreid[0]);
+  // core 0 is done, wait for the others
+  nocdone();
+  info_printf("done...\n");
   sync_printall();
+
   printf("leaving main...\n");
   printf("***********************************************************\n");
   printf("***********************************************************\n");
