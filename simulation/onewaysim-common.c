@@ -14,6 +14,10 @@
 #include <stdarg.h>
 #include <string.h>
 
+#ifndef RUNONPATMOS
+#include <time.h>
+#endif
+
 #include "onewaysim.h"
 
 unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
@@ -83,18 +87,18 @@ void nocinit()
     corethread_create(&corethread[c], &corethreadtbs, (void *)&coreid[c]);
 #else
     // the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void *
-    pthread_create(&corethread[c], NULL, (void * (*)(void *))&corethreadtbs, (void *)&coreid[c]);
+    pthread_create(&corethread[c], NULL, (void *(*)(void *)) & corethreadtbs, (void *)&coreid[c]);
 #endif
   }
 }
 
 void noccontrol()
 {
-// on host
 #ifdef RUNONPATMOS
-  printf("noc control is done in HW when running on patmos\n");
+  info_printf("noc control is done in HW when running on patmos\n");
+  runcores = false; // stop the cores here or somewhere else...
 #else
-  printf("simulation control when just running on host PC\n");
+  info_printf("simulation control when just running on host PC\n");
   simcontrol();
 #endif
 }
@@ -113,7 +117,7 @@ void nocdone()
 #else
     pthread_join(corethread[c], NULL);
 #endif
-    info_printf("core thread %d joined: coreid=%d\n", c);
+    info_printf("core thread %d joined\n", c);
   }
 }
 
@@ -124,6 +128,7 @@ void nocdone()
 // we are core 0
 int main(int argc, char *argv[])
 {
+  runcores = true;
   printf("***********************************************************\n");
   printf("onewaysim-target main(): ******************************************\n");
   printf("***********************************************************\n");
@@ -138,7 +143,6 @@ int main(int argc, char *argv[])
   // "start" ourself (core 0)
   corethreadtbs(&coreid[0]);
   // core 0 is done, wait for the others
-  runcores = false;
   nocdone();
   info_printf("done...\n");
   sync_printall();
@@ -256,7 +260,7 @@ void sync_printf(int cid, const char *format, ...)
     //volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
     //int val = *io_ptr;
     int val = 0;
-    timestamps[cid][mi[cid]] = (unsigned long)val;
+    timestamps[cid][mi[cid]] = getcycles(); //(unsigned long)val;
     va_list args;
     va_start(args, format);
     vsprintf(&strings[cid][mi[cid]][0], format, args);
@@ -271,10 +275,7 @@ void info_printf(const char *format, ...)
   // cid is equal to the number of CORES (i.e., the top buffer)
   if (mi[CORES] < SYNCPRINTBUF)
   {
-    //volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
-    //int val = *io_ptr;
-    int val = 0;
-    timestamps[CORES][mi[CORES]] = (unsigned long)val;
+    timestamps[CORES][mi[CORES]] = getcycles(); //(unsigned long)val;
     va_list args;
     va_start(args, format);
     vsprintf(&strings[CORES][mi[CORES]][0], format, args);
@@ -314,10 +315,10 @@ void sync_printall()
       }
     }
     if (closestcoreid == CORES) // info core?
-      printf("[cycle=%10lu, info=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], 0,
+      printf("[cycle=%lu, info=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], 0,
              minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
     else // other cores
-      printf("[cycle=%10lu, core=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], closestcoreid,
+      printf("[cycle=%lu, core=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], closestcoreid,
              minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
 
     usleep(1000); // perhaps not needed
@@ -336,4 +337,17 @@ void sync_printall()
   }
 
   //printf("leaving sync_printall()...\n");
+}
+
+// used for synchronizing printf from the different cores
+unsigned long getcycles()
+{
+#ifdef RUNONPATMOS
+  volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
+  return (unsigned long)*io_ptr;
+#else
+  clock_t now_t;
+  now_t = clock();
+  return (unsigned long)now_t;
+#endif
 }

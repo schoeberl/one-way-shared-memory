@@ -23,13 +23,10 @@
 
 int tbstrigger(int cid)
 {
-  // table 3.3 in the patmos manual
-  //volatile _IODEV int *io_ptr = (volatile _IODEV int *)(PATMOS_IO_TIMER + 4);
-  //int val = *io_ptr;
-  int val = 0;
-  sync_printf(cid, "-->Time-synced trigger on core %d: Cycles = %d\n", cid, val);
+  unsigned long cyclecnt = getcycles();
+  sync_printf(cid, "-->Time-synced trigger on core %d: Cycles = %lu\n", cid, cyclecnt);
   sync_printf(cid, "-->HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER = %lu\n", HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
-  return val;
+  return cyclecnt;
 }
 
 // the cores
@@ -41,7 +38,8 @@ void corethreadtbs(void *coreid)
   unsigned long tdmround = 0xFFFFFFFF;
   unsigned long hyperperiod = 0xFFFFFFFF;
   // all cores except core 0
-  while (cid > 0 && runcores)
+  //while (cid > 0 && runcores)
+  while (runcores)
   {
     //sync_printf(cid, "while: in corethreadtbs(%d)...\n", cid);
     // the cores are aware of the global cycle times for time-based-synchronization
@@ -67,7 +65,7 @@ void corethreadtbs(void *coreid)
       noccontrol();
   }
 
-  sync_printf(cid, "leaving corethreadtbs(%d)...core0cnt %d\n", cid);
+  sync_printf(cid, "leaving corethreadtbs(%d)...\n", cid);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

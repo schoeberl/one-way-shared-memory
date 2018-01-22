@@ -59,6 +59,7 @@ void simcontrol()
   TDMROUND_REGISTER = 0;
 
   hyperperiod++;
+  runcores = false;
   sync_printf(0, "leaving noccontrol()...\n");
 }
 
