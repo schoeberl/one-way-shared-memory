@@ -9,6 +9,14 @@
   License: Simplified BSD
 */
 
+#define RUNONPATMOS
+
+#ifdef RUNONPATMOS
+#include "libcorethread/corethread.h"
+#else
+#include <pthread.h>
+#endif
+
 // how many messages the printfbuffer can store for each core
 #define SYNCPRINTBUF 50
 
@@ -22,7 +30,13 @@ extern unsigned long alltxmem[CORES][CORES - 1][MEMBUF]; // a slot for loop-back
 extern unsigned long allrxmem[CORES][CORES - 1][MEMBUF]; // a slot for loop-back testing included
 
 // patmos hardware registers provided via Scala HDL
+#ifdef RUNONPATMOS
+volatile _UNCACHED static bool runcores;
+typedef volatile _UNCACHED unsigned long PATMOS_REGISTER;
+#else
+volatile static bool runcores;
 typedef volatile unsigned long PATMOS_REGISTER;
+#endif
 
 // defined patmos hardware registers (simulated)
 // we do not have one for the SLOT counter in the simulator
@@ -86,6 +100,9 @@ typedef struct buffer_t
 //extern bool runnoc;
 void nocdone();
 void noccontrol();
+#ifndef RUNONPATMOS
+void simcontrol();
+#endif
 
 // functions in the target and simulator
 void sync_printf(int, const char *format, ...);

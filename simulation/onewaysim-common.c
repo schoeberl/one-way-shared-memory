@@ -1,6 +1,6 @@
 /*
   A software simulation of the One-Way Shared Memory
-  Some utility functions
+  Run on Patmos (the target) (and the PC)
 
   Copyright: CBS, DTU
   Authors: Rasmus Ulslev Pedersen, Martin Schoeberl
@@ -14,8 +14,145 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include <machine/patmos.h>
 #include "onewaysim.h"
+
+unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
+unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
+
+///////////////////////////////////////////////////////////////////////////////
+// Control code for communication patterns
+///////////////////////////////////////////////////////////////////////////////
+
+// init patmos (simulated) internals
+Core core[CORES];
+// signal used to stop terminate the cores
+
+static int coreid[CORES];
+
+#ifdef RUNONPATMOS
+static corethread_t corethread[CORES];
+#else
+static pthread_t corethread[CORES];
+#endif
+
+void nocmem()
+{
+  // map ms's alltxmem and allrxmem to each core's local memory
+  for (int i = 0; i < CORES; i++)
+  { // allocate pointers to each core's membuf array
+    core[i].txmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    core[i].rxmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    for (int j = 0; j < CORES - 1; j++)
+    { // assign membuf addresses from allrx and alltx to rxmem and txmem
+      core[i].txmem[j] = alltxmem[i][j];
+      core[i].rxmem[j] = allrxmem[i][j];
+      for (int m = 0; m < MEMBUF; m++)
+      { // zero the tx and rx membuffer slots
+        // see the comment on 'struct Core'
+        core[i].txmem[j][m] = 0;
+        core[i].rxmem[j][m] = 0;
+      }
+    }
+  }
+}
+
+// patmos memory initialization
+// function pointer to one of the test cases
+void nocinit()
+{
+  info_printf("in nocinit()...\n");
+  inittxrxmaps();
+
+  nocmem();
+
+  // init signals and counters
+  HYPERPERIOD_REGISTER = 0;
+  TDMROUND_REGISTER = 0;
+  for (int c = 0; c < CORES; c++)
+  {
+    coreid[c] = c;
+#ifdef RUNONPATMOS
+    corethread[c] = c; // which core it will run on
+#endif
+  }
+
+  // start the "slave" cores
+  for (int c = 1; c < CORES; c++)
+  {
+#ifdef RUNONPATMOS
+    corethread_create(&corethread[c], &corethreadtbs, (void *)&coreid[c]);
+#else
+    // the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void *
+    pthread_create(&corethread[c], NULL, (void * (*)(void *))&corethreadtbs, (void *)&coreid[c]);
+#endif
+  }
+}
+
+void noccontrol()
+{
+// on host
+#ifdef RUNONPATMOS
+  printf("noc control is done in HW when running on patmos\n");
+#else
+  printf("simulation control when just running on host PC\n");
+  simcontrol();
+#endif
+}
+
+void nocdone()
+{
+  info_printf("waiting for cores to join ...\n");
+  int *retval;
+  // now let the others join
+  for (int c = 1; c < CORES; c++)
+  {
+    info_printf("core thread %d to join...\n", c);
+// the cores *should* join here...
+#ifdef RUNONPATMOS
+    corethread_join(corethread[c], (void **)&retval);
+#else
+    pthread_join(corethread[c], NULL);
+#endif
+    info_printf("core thread %d joined: coreid=%d\n", c);
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//shared main
+///////////////////////////////////////////////////////////////////////////////
+
+// we are core 0
+int main(int argc, char *argv[])
+{
+  printf("***********************************************************\n");
+  printf("onewaysim-target main(): ******************************************\n");
+  printf("***********************************************************\n");
+#ifdef RUNONPATMOS
+  printf("RUNONPATMOS is defined...\n");
+#else
+  printf("RUNONPATMOS is not defined...\n");
+#endif
+  //start the other cores
+  runcores = true;
+  nocinit();
+  // "start" ourself (core 0)
+  corethreadtbs(&coreid[0]);
+  // core 0 is done, wait for the others
+  runcores = false;
+  nocdone();
+  info_printf("done...\n");
+  sync_printall();
+
+  printf("leaving main...\n");
+  printf("***********************************************************\n");
+  printf("***********************************************************\n");
+  return 0;
+}
+
+///////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////
+// utility stuff
+///////////////////////////////////////////////////////////////////
 
 //target tables
 //information on where to send tx slots
@@ -116,8 +253,9 @@ void sync_printf(int cid, const char *format, ...)
 {
   if (mi[cid] < SYNCPRINTBUF)
   {
-    volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
-    int val = *io_ptr;
+    //volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
+    //int val = *io_ptr;
+    int val = 0;
     timestamps[cid][mi[cid]] = (unsigned long)val;
     va_list args;
     va_start(args, format);
@@ -133,8 +271,9 @@ void info_printf(const char *format, ...)
   // cid is equal to the number of CORES (i.e., the top buffer)
   if (mi[CORES] < SYNCPRINTBUF)
   {
-    volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
-    int val = *io_ptr;
+    //volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
+    //int val = *io_ptr;
+    int val = 0;
     timestamps[CORES][mi[CORES]] = (unsigned long)val;
     va_list args;
     va_start(args, format);
@@ -196,5 +335,5 @@ void sync_printall()
     }
   }
 
-  printf("leaving sync_printall()...\n");
+  //printf("leaving sync_printall()...\n");
 }
