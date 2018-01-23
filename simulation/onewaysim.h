@@ -9,7 +9,7 @@
   License: Simplified BSD
 */
 
-#define RUNONPATMOS
+// #define RUNONPATMOS
 
 #ifdef RUNONPATMOS
 #include "libcorethread/corethread.h"
