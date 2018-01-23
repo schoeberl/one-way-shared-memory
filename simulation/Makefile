@@ -1,8 +1,7 @@
-SHELL = /bin/bash
 CC=gcc
-PATMOSHOME=/home/ulslevpedersen/t-crest/patmos
+PATMOSHOME=~/t-crest/patmos
 
-HOSTSOURCEFILES = onewaysim-common.c onewaysim-host.c
+HOSTSOURCEFILES = onewaysim-target.c onewaysim-common.c onewaysim-host.c
 
 doit: 
 	rm -f ./a.out

@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 {
   runcores = true;
   printf("***********************************************************\n");
-  printf("onewaysim-target main(): ******************************************\n");
+  printf("onewaysim-target main(): **********************************\n");
   printf("***********************************************************\n");
 #ifdef RUNONPATMOS
   printf("RUNONPATMOS is defined...\n");
