@@ -9,7 +9,7 @@
   License: Simplified BSD
 */
 
-// #define RUNONPATMOS
+//#define RUNONPATMOS
 
 #ifdef RUNONPATMOS
 #include "libcorethread/corethread.h"
@@ -65,27 +65,25 @@ typedef struct Core
 // declare noc consisting of cores
 extern Core core[CORES];
 
-// a struct for handshaking
+// a struct for the handshake push message
 typedef struct handshakemsg_t
 {
-  // if non-zero then valid msg
-  // if respid = 0 then it is a request
-  unsigned long reqid;
-  // if non-zero then it is a response
-  unsigned long respid;
+  unsigned long data0;
   unsigned long data1;
   unsigned long data2;
+  unsigned long pushid; // 0 means no message
 } handshakemsg_t;
+
+// a struct for handshaking acknowledgement
+typedef struct handshakeack_t
+{
+  unsigned long ackid;
+} handshakeack_t;
 
 // a struct for state exchange
 typedef struct es_msg_t
 {
-  // if non-zero then valid msg
-  // if respid = 0 then it is a request
-  unsigned long reqid;
-  // if non-zero then it is a response
-  unsigned long respid;
-  //sensor id
+  // sensor id
   unsigned long sensorid;
   //sensor value
   unsigned long sensorval;

@@ -72,46 +72,62 @@ void corethreadtbs(void *coreid)
 //COMMUNICATION PATTERN: Handshaking Protocol
 ///////////////////////////////////////////////////////////////////////////////
 
-// the cores
+void triggerhandshake(int cid)
+{
+  sync_printf(cid, "handshaketriggger in core %d...\n", cid);
+}
+
 void corethreadhsp(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
   unsigned long tdmround = 0xFFFFFFFF;
   unsigned long hyperperiod = 0xFFFFFFFF;
-  handshakemsg_t txmsg;
-  memset(&txmsg, 0, sizeof(txmsg));
-  handshakemsg_t rxmsg;
-  memset(&rxmsg, 0, sizeof(rxmsg));
+  handshakemsg_t pushmsg;
+  memset(&pushmsg, 0, sizeof(pushmsg));
+  handshakeack_t ackmsg;
+  memset(&ackmsg, 0, sizeof(ackmsg));
 
   sync_printf(cid, "in corethreadhsp(%d)...\n", cid);
-  sync_printf(cid, "sizeof(txmsg)=%d\n", sizeof(txmsg));
-  //kickstart with sending a request to each of the other cores
-  txmsg.reqid = 1; // want to get message 1 from another core (and no more)
+
+  //  push a message to another core
+  //    (and wait for ack)
+  //  doing this for core 1 to core 2 to keep it transparent
+  int pushcoreid = 1;
+  int ackcoreid = 2;
+  // rx slot from txcoreid, rxcoreid, and txslot
+  int ackcoreidindexmap = getrxslot(pushcoreid, cid, 0);
+  int lastpushid = cid + 10;
+  pushmsg.pushid = lastpushid; // so we are expecting a ack id of 10 + our core id
   memtxprint(cid);
   printf("\n");
-  memcpy(core[cid].txmem[0], &txmsg, sizeof(txmsg));
+  // only copy to the tx buffer if this is the pushcoreid
+  if (cid == pushcoreid)
+  {
+    memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
+  }
   memtxprint(cid);
 
-  // todo: poll on the last word
+  int lastackid = 0; // 0 means no message
 
-  // copy what we got
-  memcpy(&rxmsg, core[cid].rxmem[0], sizeof(rxmsg));
-  // first we will see the request for message id 1 arriving at each core
-  // then we will see that each core responds with message 1 and some data
-  // it keeps repeating the same message until it gets another request for a new
-  // message id
-  sync_printf(cid, "Core %ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);
-  // is it a request?
-  if (rxmsg.reqid > 0 && rxmsg.respid == 0)
+  while (runcores)
   {
-    memset(&txmsg, 0, sizeof(txmsg));
-    txmsg.reqid = rxmsg.reqid;
-    txmsg.respid = rxmsg.reqid;
-    txmsg.data1 = step;
-    txmsg.data2 = cid;
-    // schedule for sending (tx)
-    memcpy(core[cid].txmem[0], &txmsg, sizeof(txmsg));
+    int monitorlastword = core[cid].rxmem[ackcoreidindexmap][0];
+    if (monitorlastword != lastackid)
+    {
+      // new message id
+      //   copy rx buffer
+      memcpy(&ackmsg, core[cid].rxmem[0], sizeof(ackmsg));
+      // ack it (if we are the test core set up to do so)
+      ackmsg.ackid = monitorlastword;
+      lastackid = monitorlastword;
+      // tx if we are the core set up to do so
+      if (cid == ackcoreid)
+      {
+        memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
+      }
+    }
+    //sync_printf(cid, "Core %ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  ackmsg.reqid=%lu,\n  ackmsg.respid=%lu,\n  ackmsg.data1=%lu,\n  ackmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, ackmsg.reqid, ackmsg.respid, ackmsg.data1, ackmsg.data2);
   }
 }
 
@@ -119,45 +135,36 @@ void corethreadhsp(void *coreid)
 //COMMUNICATION PATTERN: Exchange of state
 ///////////////////////////////////////////////////////////////////////////////
 
-// the cores
+// called when there is change of state
+void triggerexchangeofstate(int cid)
+{
+  sync_printf(cid, "Core %d change of state...\n", cid);
+}
+
 void corethreades(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  handshakemsg_t txmsg;
-  memset(&txmsg, 0, sizeof(txmsg));
-  handshakemsg_t rxmsg;
-  memset(&rxmsg, 0, sizeof(rxmsg));
+  es_msg_t esmsg;
+  memset(&esmsg, 0, sizeof(esmsg));
 
-  //kickstart with sending a request to each of the other cores
-  txmsg.reqid = 1; // want to get message 1 from another core (and no more)
-  memcpy(&core[cid].txmem[0], &txmsg, sizeof(txmsg));
-
-  // copy what we got
-  memcpy(&rxmsg, core[cid].rxmem, sizeof(rxmsg));
-
-  // see handshaking protocol (which this is built upon)
-  // todo: poll on the last word
-  
-  // is it a request?
-  if (rxmsg.reqid > 0 && rxmsg.respid == 0)
+  int delay = 1000000;
+  while (runcores)
   {
-    sync_printf(cid, "Core %ld sensor request: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.data1=%lu,\n  rxmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);
-    memset(&txmsg, 0, sizeof(txmsg));
-    txmsg.reqid = rxmsg.reqid;
-    txmsg.respid = rxmsg.reqid;
-    txmsg.data1 = cid;
-    txmsg.data2 = rxmsg.reqid + rxmsg.reqid + cid; // not real
-    // schedule for sending (tx)
-    memcpy(core[cid].txmem, &txmsg, sizeof(txmsg));
-  }
+    if (step % delay == 0)
+    {
+      //sync_printf(cid, "Core %ld sensor request: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  ackmsg.ackid=%lu,\n  ackmsg.ackid=%lu,\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, ackmsg.ackid, ackmsg.ackid);
+      esmsg.sensorid = 10 + cid;     // to be able to recognize it easily on the tx side
+      esmsg.sensorval = getcycles(); // the artificial "temperature" proxy
+      memcpy(core[cid].txmem, &esmsg, sizeof(esmsg));
+    }
 
-  // is it a response?
-  if (rxmsg.reqid > 0 && rxmsg.respid == rxmsg.reqid)
-  {
-    sync_printf(cid, "Core %ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  rxmsg.reqid=%lu,\n  rxmsg.respid=%lu,\n  rxmsg.sensorid=%lu,\n  rxmsg.sensorval=%lu\n", cid, TDMROUND_REGISTER, TDMROUND_REGISTER, rxmsg.reqid, rxmsg.respid, rxmsg.data1, rxmsg.data2);
+    // sensor read
+    if (core[cid].txmem[0][0] > 0)
+    {
+      //sync_printf(cid, "Core %ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  ackmsg.reqid=%lu,\n  ackmsg.respid=%lu,\n  ackmsg.sensorid=%lu,\n  ackmsg.sensorval=%lu\n", cid, TDMROUND_REGISTER, TDMROUND_REGISTER, ackmsg.reqid, ackmsg.respid, ackmsg.data1, ackmsg.data2);
+    }
+    step++;
   }
 }
 
@@ -165,47 +172,35 @@ void corethreades(void *coreid)
 //COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
 ///////////////////////////////////////////////////////////////////////////////
 
-// the cores
+//called when there is a new buffer
+void triggeronbuffer(int cid)
+{
+  sync_printf(cid, "Core %d new buffer...\n", cid);
+}
+
 void corethreadsdb(void *coreid)
 {
   int cid = *((int *)coreid);
   sync_printf(cid, "Core %d started...\n", cid);
-  if (cid == 0)
-  {
-  }
   int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  buffer_t buffer_in_a;
-  buffer_t buffer_in_b;
-  buffer_t *active_buffer_in = &buffer_in_a;
-  bool a_in_active = true;
-  //memset(&buffer_in_a, 0, sizeof(buffer_in_a));
-  //memset(&buffer_in_b, 0, sizeof(buffer_in_b));
+  buffer_t buffer_in;
+  memset(&buffer_in, 0, sizeof(buffer_in));
 
-  // todo: poll on the last word
-  
-  // copy what we got into the passive buffer
-  if (a_in_active)
-    memcpy(&buffer_in_b, core[cid].rxmem, sizeof(buffer_t));
-  else
-    memcpy(&buffer_in_a, core[cid].rxmem, sizeof(buffer_t));
-
-  if (a_in_active)
+  int lastword = 0;
+  while (runcores)
   {
-    active_buffer_in = &buffer_in_b;
-    a_in_active = false;
+    int monitorlastword = core[cid].rxmem[0][0];
+    if (monitorlastword != lastword)
+    {
+      memcpy(&buffer_in, core[cid].rxmem, sizeof(buffer_t));
+      triggeronbuffer(cid);
+    }
+    // tx new data for other buffers at another core
+    // step data used here
+    core[cid].txmem[0][0] = 10000 + step * 100 + cid;
+    core[cid].txmem[1][0] = 10000 + step * 100 + cid;
+    core[cid].txmem[2][0] = 10000 + step * 100 + cid;
+    core[cid].txmem[3][0] = 10000 + step * 100 + cid;
+    step++;
   }
-  else
-  {
-    active_buffer_in = &buffer_in_a;
-    a_in_active = true;
-  }
-
-  // tx new data for other buffers at another core
-  // just step data, which is only related to thread scheduling (artificial data)
-  core[cid].txmem[0][0] = step;
-  core[cid].txmem[1][0] = step + 1;
-  core[cid].txmem[2][0] = step + 2;
-  core[cid].txmem[3][0] = step + 3;
 }
