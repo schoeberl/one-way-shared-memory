@@ -111,6 +111,8 @@ void corethreadhsp(void *coreid);
 void corethreades(void *coreid);
 void corethreadsdb(void *coreid);
 
+void playandtest();
+
 void memtxprint(int coreid);
 void memrxprint(int coreid);
 void memallprint();

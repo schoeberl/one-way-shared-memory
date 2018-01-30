@@ -134,6 +134,9 @@ int main(int argc, char *argv[])
   printf("***********************************************************\n");
 #ifdef RUNONPATMOS
   printf("RUNONPATMOS is defined...\n");
+  // play and test
+  // comment out if not needed or used
+  //playandtest(); return 0;
 #else
   printf("RUNONPATMOS is not defined...\n");
 #endif
@@ -343,7 +346,7 @@ void sync_printall()
 unsigned long getcycles()
 {
 #ifdef RUNONPATMOS
-  volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
+  volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; 
   return (unsigned long)*io_ptr;
 #else
   clock_t now_t;
