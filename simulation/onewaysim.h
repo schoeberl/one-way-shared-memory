@@ -123,4 +123,8 @@ void inittxrxmaps();
 int getrxslot(int txcoreid, int rxcoreid, int txslot);
 int gettxcoreid(int rxcoreid, int rxslot);
 
+// the two new ones (todo: merge)
+void initroutestrings();
+void showmappings();
+
 #endif

@@ -13,44 +13,14 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <math.h>
 
 //#include <machine/patmos.h>
 #include "onewaysim.h"
-
-#define FOURNODES "nel|"\
-                  "  nl|"\
-                  "   el|"
-
-#define FOURNODES_N 4
-
-// TX slot in rows, Cores in cols
-static int tx_tdm_slot[FOURNODES_N-1][FOURNODES_N] = {0};
-
-// route strings
-static char *route[FOURNODES_N-1];
-
-void initroutestrings(){
-  char *rstr = FOURNODES;
-  int start = 0;
-  int stop = 0;
-  for(int i = 0; i < FOURNODES_N-1; i++){
-    while(rstr[stop] != '|')
-      stop++;
-    route[i] = calloc(stop - start + 1 , 1);
-    strncpy(route[i], &rstr[start], stop - start);
-    stop++;
-    start = stop;
-    printf("%s\n", route[i]);
-  }
-}
-
 
 // called repeatedly from core 0
 // this is *not* used when running on patmos (real HW)
 void simcontrol()
 {
-  initroutestrings();
   sync_printf(0, "in noccontrol()...\n");
 
   // change this to the number of runs you want

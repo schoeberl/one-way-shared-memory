@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <math.h>
 
 #ifndef RUNONPATMOS
 #include <time.h>
@@ -124,7 +125,6 @@ void nocdone()
 ///////////////////////////////////////////////////////////////////////////////
 //shared main
 ///////////////////////////////////////////////////////////////////////////////
-
 // we are core 0
 int main(int argc, char *argv[])
 {
@@ -153,6 +153,9 @@ int main(int argc, char *argv[])
   printf("leaving main...\n");
   printf("***********************************************************\n");
   printf("***********************************************************\n");
+  printf("TX AND RX MAPPING TESTING:\n");
+  initroutestrings();
+  showmappings();
   return 0;
 }
 
@@ -160,6 +163,89 @@ int main(int argc, char *argv[])
 ///////////////////////////////////////////////////////////////////
 // utility stuff
 ///////////////////////////////////////////////////////////////////
+
+// new mappings (still not perfect)
+// todo: merge / delete with present mappings (see further down)
+#define FOURNODES "nel|"\
+                  "  nl|"\
+                  "   el|"
+
+#define FOURNODES_N 4
+
+static const char *rstr = FOURNODES;
+
+// TX slot in rows, Cores in cols
+static int tx_tdm_slot[FOURNODES_N-1][FOURNODES_N] = {0};
+
+// route strings
+static char *routes[FOURNODES_N-1];
+
+// get coreid from position in grid
+int getcoreid(int row, int col, int n){
+  return row * n + col;
+}
+
+void initroutestrings(){
+  int start = 0;
+  int stop = 0;
+  for(int i = 0; i < FOURNODES_N-1; i++){
+    while(rstr[stop] != '|')
+      stop++;
+    routes[i] = calloc(stop - start + 1 , 1);
+    strncpy(routes[i], &rstr[start], stop - start);
+    stop++;
+    start = stop;
+    //printf("%s\n", routes[i]);
+  }
+}
+
+void showmappings(){
+  int n = (int)sqrt(FOURNODES_N);
+  int rows = n;
+  int cols = n;
+  int routecnt = FOURNODES_N - 1;
+
+  // tx router grid
+  for(int tx_i = 0; tx_i < rows; tx_i++){
+    for(int tx_j = 0; tx_j < cols; tx_j++){
+      // simulate each route for the given rx core
+      for(int r = 0; r < routecnt; r++){
+	// the tx and rx tdm slot are known by now
+        char *route = routes[r];
+	int txtdmslot = r;
+	int rxtdmslot = (strlen(route) + 1) % 3; 
+	// find the rx core id
+	int rx_i = tx_i;
+	int rx_j = tx_j;
+        for(int s = 0; s < strlen(route); s++){
+          switch(route[s]){
+	    case 'n':
+              rx_i = (rx_i - 1 >= 0 ? rx_i - 1 : n - 1);
+	      break;
+	    case 's':
+	      rx_i = (rx_i + 1 < n ? rx_i + 1 : 0);
+	      break;
+            case 'e':
+              rx_j = (rx_j + 1 < n ? rx_j + 1 : 0);
+	      break;
+            case 'w':
+	      rx_j = (rx_j - 1 >= 0 ? rx_j - 1 : n - 1);
+	      break;
+	  }
+        }
+        printf("\"%s\":\n", route); 
+        printf("  Core %d@(%d,%d)  to Core %d@(%d,%d)\n",  getcoreid(tx_i, tx_j, n), tx_i, tx_j, getcoreid(rx_i, rx_j, n), rx_i, rx_j); 
+        printf("  TX TDM slot %d to RX TDM slot %d\n", txtdmslot, rxtdmslot); 
+     }
+    }
+  }
+}
+
+
+
+
+
+
 
 //target tables
 //information on where to send tx slots
