@@ -213,7 +213,7 @@ void showmappings(){
 	// the tx and rx tdm slot are known by now
         char *route = routes[r];
 	int txtdmslot = r;
-	int rxtdmslot = (strlen(route) + 1) % 3; 
+	int rxtdmslot = (strlen(route)) % 3; 
 	// find the rx core id
 	int rx_i = tx_i;
 	int rx_j = tx_j;
@@ -233,9 +233,11 @@ void showmappings(){
 	      break;
 	  }
         }
-        printf("\"%s\":\n", route); 
-        printf("  Core %d@(%d,%d)  to Core %d@(%d,%d)\n",  getcoreid(tx_i, tx_j, n), tx_i, tx_j, getcoreid(rx_i, rx_j, n), rx_i, rx_j); 
-        printf("  TX TDM slot %d to RX TDM slot %d\n", txtdmslot, rxtdmslot); 
+	if (getcoreid(rx_i, rx_j, n) == 2) {
+	  printf("\"%s\":\n", route); 
+          printf("  Core %d@(%d,%d)  to Core %d@(%d,%d)\n",  getcoreid(tx_i, tx_j, n), tx_i, tx_j, getcoreid(rx_i, rx_j, n), rx_i, rx_j); 
+          printf("  TX TDM slot %d to RX TDM slot %d\n", txtdmslot, rxtdmslot); 
+	}
      }
     }
   }
