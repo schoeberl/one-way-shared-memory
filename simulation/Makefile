@@ -3,6 +3,10 @@ PATMOSHOME=~/t-crest/patmos
 
 HOSTSOURCEFILES = onewaysim-target.c onewaysim-common.c onewaysim-host.c
 
+help:
+	#doit: run the simulator only on the host
+	#onpatmos: run the test on patmos
+
 doit: 
 	rm -f ./a.out
 	$(CC) -I$(PATMOSHOME)/../newlib/newlib/libc/machine/patmos -pthread -g $(HOSTSOURCEFILES)
