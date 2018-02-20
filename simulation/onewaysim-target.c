@@ -98,7 +98,7 @@ void corethreadhsp(void *coreid)
   int pushcoreid = 1;
   int ackcoreid = 2;
   // rx slot from txcoreid, rxcoreid, and txslot
-  int ackcoreidindexmap = getrxslot(pushcoreid, cid, 0);
+  int ackcoreidindexmap = 0;//getrxslot(pushcoreid, cid, 0);
   int lastpushid = cid + 10;
   pushmsg.pushid = lastpushid; // so we are expecting a ack id of 10 + our core id
   memtxprint(cid);

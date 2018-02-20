@@ -42,8 +42,9 @@ void simcontrol()
           // sync_printf(0,"txslot   = %d\n", txslot);
           // sync_printf(0,"getrxslot(txcoreid, rxcoreid, txslot)=%d\n", getrxslot(txcoreid, rxcoreid, txslot));
           // sync_printf(0,"m        = %d\n", m);
-          core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
-          txslot++;
+          //core[rxcoreid].rxmem[getrxslot(txcoreid, rxcoreid, txslot)][m] = core[txcoreid].txmem[txslot][m];
+          core[rxcoreid].rxmem[0][m] = core[txcoreid].txmem[txslot][m];
+ txslot++;
         }
       }
     } // tdmround ends

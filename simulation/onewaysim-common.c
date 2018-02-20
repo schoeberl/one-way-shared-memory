@@ -66,7 +66,7 @@ void nocmem()
 void nocinit()
 {
   info_printf("in nocinit()...\n");
-  inittxrxmaps();
+  //inittxrxmaps();
 
   nocmem();
 
@@ -155,149 +155,97 @@ int main(int argc, char *argv[])
   printf("***********************************************************\n");
   printf("TX AND RX MAPPING TESTING:\n");
   initroutestrings();
+  inittxrxmaps();
   showmappings();
   return 0;
 }
 
 ///////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////
 // utility stuff
 ///////////////////////////////////////////////////////////////////
 
 // new mappings (still not perfect)
-// todo: merge / delete with present mappings (see further down)
-#define FOURNODES "nel|"\
-                  "  nl|"\
-                  "   el|"
+static const char *rstr = ROUTESSTRING;
 
-#define FOURNODES_N 4
-
-static const char *rstr = FOURNODES;
-
-// TX slot in rows, Cores in cols
-static int tx_tdm_slot[FOURNODES_N-1][FOURNODES_N] = {0};
+static int tx_core_tdmslots_map[CORES][TDMSLOTS];
+static int rx_core_tdmslots_map[CORES][TDMSLOTS];
 
 // route strings
-static char *routes[FOURNODES_N-1];
+static char *routes[TDMSLOTS];
 
-// get coreid from position in grid
+// get coreid from NoC grid position
 int getcoreid(int row, int col, int n){
   return row * n + col;
 }
 
+// convert the routes string into separate routes 
 void initroutestrings(){
   int start = 0;
   int stop = 0;
-  for(int i = 0; i < FOURNODES_N-1; i++){
+  for(int i = 0; i < TDMSLOTS; i++){
     while(rstr[stop] != '|')
       stop++;
     routes[i] = calloc(stop - start + 1 , 1);
     strncpy(routes[i], &rstr[start], stop - start);
     stop++;
     start = stop;
-    //printf("%s\n", routes[i]);
+    printf("%s\n", routes[i]);
   }
 }
 
-void showmappings(){
-  int n = (int)sqrt(FOURNODES_N);
-  int rows = n;
-  int cols = n;
-  int routecnt = FOURNODES_N - 1;
-
-  // tx router grid
-  for(int tx_i = 0; tx_i < rows; tx_i++){
-    for(int tx_j = 0; tx_j < cols; tx_j++){
+// init rxslot and txcoreid lookup tables
+void inittxrxmaps()
+{
+  // tx router grid:
+  //   the idea here is that we follow the word/flit from its tx slot to its rx slot.
+  //   this is done by tracking the grid index for each of the possible directins of
+  //   'n', 'e', 's', and 'w'. From the destination grid position the core id is 
+  //   calculated (using getcoreid(gridx, gridy, n). 
+  for(int tx_i = 0; tx_i < GRIDN; tx_i++){
+    for(int tx_j = 0; tx_j < GRIDN; tx_j++){
       // simulate each route for the given rx core
-      for(int r = 0; r < routecnt; r++){
+      for(int slot = 0; slot < TDMSLOTS; slot++){
 	// the tx and rx tdm slot are known by now
-        char *route = routes[r];
-	int txtdmslot = r;
+        char *route = routes[slot];
+
+        int txcoreid = getcoreid(tx_i, tx_j, GRIDN);
+        int rxcoreid = -1;
+	
+	int txtdmslot = slot;
 	int rxtdmslot = (strlen(route)) % 3; 
-	// find the rx core id
+	
+	// now for the rx core id
 	int rx_i = tx_i;
 	int rx_j = tx_j;
-        for(int s = 0; s < strlen(route); s++){
-          switch(route[s]){
+        for(int r = 0; r < strlen(route); r++){
+          switch(route[r]){
 	    case 'n':
-              rx_i = (rx_i - 1 >= 0 ? rx_i - 1 : n - 1);
+              rx_i = (rx_i - 1 >= 0 ? rx_i - 1 : GRIDN - 1);
 	      break;
 	    case 's':
-	      rx_i = (rx_i + 1 < n ? rx_i + 1 : 0);
+	      rx_i = (rx_i + 1 < GRIDN ? rx_i + 1 : 0);
 	      break;
             case 'e':
-              rx_j = (rx_j + 1 < n ? rx_j + 1 : 0);
+              rx_j = (rx_j + 1 < GRIDN ? rx_j + 1 : 0);
 	      break;
             case 'w':
-	      rx_j = (rx_j - 1 >= 0 ? rx_j - 1 : n - 1);
+	      rx_j = (rx_j - 1 >= 0 ? rx_j - 1 : GRIDN - 1);
 	      break;
 	  }
-        }
-	if (getcoreid(rx_i, rx_j, n) == 2) {
-	  printf("\"%s\":\n", route); 
-          printf("  Core %d@(%d,%d)  to Core %d@(%d,%d)\n",  getcoreid(tx_i, tx_j, n), tx_i, tx_j, getcoreid(rx_i, rx_j, n), rx_i, rx_j); 
-          printf("  TX TDM slot %d to RX TDM slot %d\n", txtdmslot, rxtdmslot); 
-	}
+        }        
+
+        rxcoreid = getcoreid(rx_i, rx_j, GRIDN);
+      
+        // fill in the rx core id in the tx slot map
+        tx_core_tdmslots_map[txcoreid][txtdmslot] = rxcoreid;
+	// fill in the tx core id in the rx slot map
+	rx_core_tdmslots_map[rxcoreid][rxtdmslot] = txcoreid;
      }
     }
   }
 }
 
-
-
-
-
-
-
-//target tables
-//information on where to send tx slots
-//example: rxslot[1][3][2] = 1 means that core 1 will tx a word to core 3
-//           from tx slot 2 into rx slot 1 respectively
-//useful when working on code in the transmitting end
-int rxslots[CORES][CORES][CORES - 1];
-
-//find the tx core that filled a certain rxslot.
-//useful when working in code running in the receiving end
-int txcoreids[CORES][CORES - 1];
-
-// init rxslot and txcoreid lookup tables
-void inittxrxmaps()
-{
-  for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
-  {
-    int txslot = 0;
-    for (int rxcoreid = 0; rxcoreid < CORES; rxcoreid++) // receiver core
-    {
-      if (rxcoreid != txcoreid) // cannot tx to itself
-      {
-        int rxslot = 0;
-        if (txcoreid > rxcoreid)
-          rxslot = txcoreid - 1;
-        else
-          rxslot = txcoreid;
-        rxslots[txcoreid][rxcoreid][txslot] = rxslot;
-        txcoreids[rxcoreid][rxslot] = txcoreid;
-        //sync_printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslot);
-        //sync_printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreid);
-        txslot++;
-      }
-    }
-    //sync_printf("\n");
-  }
-}
-
-// rx slot from txcoreid, rxcoreid, and txslot
-int getrxslot(int txcoreid, int rxcoreid, int txslot)
-{
-  //sync_printf("rxslots[txcoreid:%d][rxcoreid:%d][txslot:%d] = %d\n", txcoreid, rxcoreid, txslot, rxslots[txcoreid][rxcoreid][txslot]);
-  return rxslots[txcoreid][rxcoreid][txslot];
-}
-
-// txcoreid from rxcoreid and rxslot
-int gettxcoreid(int rxcoreid, int rxslot)
-{
-  //sync_printf("txcoreids[rxcoreid:%d][rxslot:%d] = %d\n", rxcoreid, rxslot, txcoreids[rxcoreid][rxslot]);
-  return txcoreids[rxcoreid][rxslot];
+void showmappings(){
 }
 
 void memtxprint(int coreid)
