@@ -180,6 +180,7 @@ int getcoreid(int row, int col, int n){
 
 // convert the routes string into separate routes 
 void initroutestrings(){
+  printf("initroutestrings:\n");
   int start = 0;
   int stop = 0;
   for(int i = 0; i < TDMSLOTS; i++){
@@ -245,7 +246,22 @@ void inittxrxmaps()
   }
 }
 
+// will print the TX and RX TDM slots for each core
 void showmappings(){
+  for(int i = 0; i < CORES; i++){
+    printf("Core %d TX TDM slots:\n", i);
+    // show them like in the paper
+    for(int j = TDMSLOTS - 1; j >= 0; j--){
+      printf("  TDM slot %d: to core %d\n", j, tx_core_tdmslots_map[i][j]); 
+    }
+  }
+  for(int i = 0; i < CORES; i++){
+    printf("Core %d RX TDM slots:\n", i);
+    // show them like in the paper
+    for(int j = TDMSLOTS - 1; j >= 0; j--){
+      printf("  TDM slot %d: from core %d\n", j, rx_core_tdmslots_map[i][j]); 
+    }
+  }
 }
 
 void memtxprint(int coreid)
