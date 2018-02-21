@@ -146,10 +146,18 @@ typedef struct buffer_t
   unsigned long data[MEMBUF * CORES];
 } buffer_t;
 
+// init patmos (simulated) internals
+Core core[CORES];
+// signal used to stop terminate the cores
+
+int coreid[CORES];
+
+
 void nocdone();
 void noccontrol();
 #ifndef RUNONPATMOS
 void simcontrol();
+void nocinit();
 #endif
 
 // functions in the target and simulator
