@@ -60,6 +60,7 @@ object Schedule {
           from = nextFrom(to)
         }
       }
+      printf(from.toString)
     }
     println("Schedule is "+schedule.length+" clock cycles")
     schedule

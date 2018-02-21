@@ -26,7 +26,7 @@ import Const._
 
 class SingleChannel extends Bundle {
   val data = UInt(width = 32)
-  // we could extend with a: val valid = Bool()
+  val valid = Bool()
 }
 
 class Channel extends Bundle {
@@ -46,9 +46,7 @@ class Router(schedule: Array[Array[Int]]) extends Module {
 
   regCounter := Mux(end, UInt(0), regCounter + UInt(1))
 
-  // Schedule table as a Chisel types table
-  // Should probably not be part of this router class
-  // as it distracts
+  // Convert schedule table to a Chisel types table
   val sched = Vec(schedule.length, Vec(Const.NR_OF_PORTS, UInt(width = 3)))
   for (i <- 0 until schedule.length) {
     for (j <- 0 until Const.NR_OF_PORTS) {
@@ -60,7 +58,7 @@ class Router(schedule: Array[Array[Int]]) extends Module {
 
   // This Mux is a little bit wasteful, as it allows from all
   // ports to all ports. A 4:1 instead of the 5:1 is way cheaper in an 4-bit LUT FPGA.
-  // But synthsize removes the unneeded input.
+  // But synthesize removes the unused input.
   for (i <- 0 until Const.NR_OF_PORTS) {
     io.ports(i).out := Reg(next = io.ports(currentSched(i)).in)
   }

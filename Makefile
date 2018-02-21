@@ -36,3 +36,11 @@ clean:
 
 format:
 	sbt "runMain oneway.ScheduleTable ../../t-crest/s4noc/noc/vhdl/generated/bt2x2/bt2x2.shd"
+
+# copy the source over to the Patmos project
+
+
+T-CREST=$(HOME)/t-crest
+
+to-patmos:
+	cp src/main/scala/oneway/*.scala $(T-CREST)/patmos/hardware/src/main/scala/oneway
