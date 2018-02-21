@@ -1,7 +1,7 @@
 CC=gcc
 PATMOSHOME=~/t-crest/patmos
 
-HOSTSOURCEFILES = onewaysim-target.c onewaysim-common.c onewaysim-host.c
+HOSTSOURCEFILES = onewaymem-simulator.c onewaymem-usecases.c onewaymem-util.c
 
 help:
 	#doit: run the simulator only on the host

@@ -1,6 +1,6 @@
 /*
   A software simulation of the One-Way Shared Memory
-  Some utility functions
+  Runs on the PC
 
   Copyright: CBS, DTU
   Authors: Rasmus Ulslev Pedersen, Martin Schoeberl
@@ -14,11 +14,9 @@
 #include <stdarg.h>
 #include <string.h>
 
-//#include <machine/patmos.h>
 #include "onewaysim.h"
 
 // called repeatedly from core 0
-// this is *not* used when running on patmos (real HW)
 void simcontrol()
 {
   sync_printf(0, "in noccontrol()...\n");
@@ -64,8 +62,81 @@ void simcontrol()
   sync_printf(0, "leaving noccontrol()...\n");
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//Simulator main
+///////////////////////////////////////////////////////////////////////////////
+
+// we are core 0
+int main(int argc, char *argv[])
+{
+  printf("***********************************************************\n");
+  printf("onewaysim-target main(): **********************************\n");
+  printf("***********************************************************\n");
+  //start the other cores
+  runcores = true;
+  nocinit();
+  // "start" ourself (core 0)
+  corethreadtbs(&coreid[0]);
+  // core 0 is done, wait for the others
+  nocdone();
+  info_printf("done...\n");
+  sync_printall();
+
+  printf("leaving main...\n");
+  printf("***********************************************************\n");
+  printf("***********************************************************\n");
+  printf("TX AND RX MAPPING TESTING:\n");
+  initroutestrings();
+  inittxrxmaps();
+  showmappings();
+  return 0;
+}
+
 ///////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ////////////////////////////////////////////////////////////////
 //should be updated (ms ?)
