@@ -21,6 +21,15 @@
 
 #include "onewaysim.h"
 
+// TODO see
+// https://github.com/t-crest/patmos/blob/master/c/apps/oneway/hello_oneway.c
+// Change the memory to a pointer base
+// #define ONEWAY_BASE *((volatile _SPM int *) 0xE8000000)
+// For the shared fields we need to use _UNCACHED: 
+// volatile _UNCACHED static int field;
+
+
+
 unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
 unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 
