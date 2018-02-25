@@ -31,7 +31,7 @@ class OneWayMemTester(dut: OneWayMem) extends Tester(dut) {
   }
   // read(0)
   step(300)
-  read(1)
+  read(0)
 }
 
 object OneWayMemTester {
