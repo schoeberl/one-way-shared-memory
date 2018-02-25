@@ -16,7 +16,7 @@ object ScheduleTester {
     println("Testing the schedule creation")
     val sref = Schedule.gen2x2Schedule()
     println(ScheduleTable.FourNodes)
-    val stest = Schedule.getSchedule(ScheduleTable.FourNodes)
+    val stest = Schedule.getSchedule(2)._1
     for (i <- 0 until sref.length) {
       val slotref = sref(i)
       val slottest = stest(i)
