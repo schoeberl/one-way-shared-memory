@@ -41,7 +41,7 @@ object OneWayMemTester {
   def main(args: Array[String]): Unit = {
     chiselMainTest(Array("--genHarness", "--test", "--backend", "c",
       "--compile", "--vcd", "--targetDir", "generated"),
-      () => Module(new OneWayMem(2, 1024))) {
+      () => Module(new OneWayMem(2, 16))) {
         c => new OneWayMemTester(c)
       }
   }
