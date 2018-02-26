@@ -29,10 +29,15 @@
 // volatile _UNCACHED static int field;
 
 
-
+#ifdef RUNONPATMOS
+#define ONEWAY_BASE *((volatile _SPM int *) 0xE8000000)
+// todo: fix address when ready
+unsigned volatile _SPM int *alltxmem = ONEWAY_BASE;
+unsigned volatile _SPM int *allrxmem = ONEWAY_BASE;
+#else
 unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
 unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
-
+#endif
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
