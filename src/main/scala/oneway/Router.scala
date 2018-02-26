@@ -35,7 +35,7 @@ class Channel extends Bundle {
 }
 
 class RouterPorts extends Bundle {
-  val ports = Vec(new Channel(), Const.NR_OF_PORTS)
+  val ports = Vec(Const.NR_OF_PORTS, new Channel())
 }
 
 class Router(schedule: Array[Array[Int]]) extends Module {
@@ -54,13 +54,14 @@ class Router(schedule: Array[Array[Int]]) extends Module {
     }
   }
 
-  // Delay the TDM schedule to have one cycle for the memory read
-  val currentSched = sched(RegNext(regCounter))
+  // TDM schedule starts one cycles later for read data delay
+  val regDelay = RegNext(regCounter, init=UInt(0))
+  val currentSched = sched(regDelay)
 
   // We assume that on reset the valid signal is false.
   // Better have it reset. 
-  for (i <- 0 until Const.NR_OF_PORTS) {
-    io.ports(i).out := RegNext(io.ports(currentSched(i)).in)
+  for (j <- 0 until Const.NR_OF_PORTS) {
+    io.ports(j).out := RegNext(io.ports(currentSched(j)).in)
   }
 }
 

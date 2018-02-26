@@ -26,21 +26,21 @@ class Node(n: Int, size: Int) extends Module {
   val end = regTdmCounter === UInt(scheduleLength - 1)
   regTdmCounter := Mux(end, UInt(0), regTdmCounter + UInt(1))
 
-  val nChannles = n * n - 1
+  val nrChannels = n * n - 1
 
   // Send data to the NoC
-  val regTxAddrLower = Reg(init = UInt(0, log2Up(scheduleLength)))
+  val regTxAddrUpper = Reg(init = UInt(0, log2Up(scheduleLength)))
   // For quicker testing use only 4 words per connection
   // TODO: get this constant from somewhere
-  val regTxAddrUpper = Reg(init = UInt(0, 2))
+  val regTxAddrLower = Reg(init = UInt(0, 2))
 
   val valid = validTab(regTdmCounter)
+  debug(valid)
   when(valid) {
-    when(regTxAddrUpper === UInt(nChannles - 1)) {
+    regTxAddrUpper := regTxAddrUpper + UInt(1)
+    when(regTxAddrUpper === UInt(nrChannels - 1)) {
       regTxAddrUpper := UInt(0)
       regTxAddrLower := regTxAddrLower + UInt(1)
-    }.otherwise {
-      regTxAddrUpper := regTxAddrUpper + UInt(1)
     }
   }
 
@@ -52,30 +52,31 @@ class Node(n: Int, size: Int) extends Module {
   memTx.io.port.wrEna := io.memPort.wrEna
   memTx.io.port.rdAddr := txAddr
   io.local.out.data := memTx.io.port.rdData
-  // TDM schedule starts one cycle late for read data delay
-  io.local.out.valid := RegNext(valid)
+  // TDM schedule starts two cycles late for read data delay
+  io.local.out.valid := RegNext(valid, init = Bool(false))
 
   // Receive data from the NoC  
-  val regRxAddrLower = Reg(init = UInt(0, log2Up(scheduleLength)))
+  val regRxAddrUpper = Reg(init = UInt(0, log2Up(scheduleLength)))
   // For quicker testing use only 4 words per connection
   // TODO: get this constant from somewhere
-  val regRxAddrUpper = Reg(init = UInt(0, 2))
+  val regRxAddrLower = Reg(init = UInt(0, 2))
 
   val validRx = io.local.in.valid
-  
+  debug(validRx)
+
   when(validRx) {
-    when(regRxAddrUpper === UInt(nChannles - 1)) {
+    regRxAddrUpper := regRxAddrUpper + UInt(1)
+    when(regRxAddrUpper === UInt(nrChannels - 1)) {
       regRxAddrUpper := UInt(0)
       regRxAddrLower := regRxAddrLower + UInt(1)
-    }.otherwise {
-      regRxAddrUpper := regRxAddrUpper + UInt(1)
     }
   }
 
   val rxAddr = Cat(regRxAddrUpper, regRxAddrLower)
+  debug(rxAddr)
 
   val memRx = Module(new DualPortMemory(size))
-  memRx.io.port.wrAddr := txAddr
+  memRx.io.port.wrAddr := rxAddr
   memRx.io.port.wrData := io.local.in.data
   memRx.io.port.wrEna := validRx
   memRx.io.port.rdAddr := io.memPort.rdAddr
