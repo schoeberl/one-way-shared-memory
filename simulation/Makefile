@@ -1,7 +1,7 @@
 CC=gcc
 PATMOSHOME=~/t-crest/patmos
 
-HOSTSOURCEFILES = onewaymem-simulator.c onewaymem-usecases.c onewaymem-util.c
+HOSTSOURCEFILES = onewaymem-simulator.c onewaymem-usecases.c
 
 help:
 	#doit: run the simulator only on the host
@@ -23,4 +23,9 @@ onpatmos:
 	rm -f ~/t-crest/patmos/c/onewaysim*
 	cp onewaysim* ~/t-crest/patmos/c/
 	#cd ~/t-crest/patmos/ && $(MAKE) BOOTAPP=bootable-bootloader APP=onewaymem tools comp gen synth config download
-	cd ~/t-crest/patmos/ && $(MAKE) APP=onewaysim-target comp download
+	cd ~/t-crest/patmos/ && $(MAKE) APP=onewaysim-target comp downloadi
+
+testoneway:
+	rm -rf $(PATMOSHOME)/c/apps/onewaytest
+	cp -R onewaytest $(PATMOSHOME)/c/apps
+	cd $(PATMOSHOME) && $(MAKE) config app download APP=onewaytest
