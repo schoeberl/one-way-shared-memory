@@ -28,4 +28,4 @@ onpatmos:
 testoneway:
 	rm -rf $(PATMOSHOME)/c/apps/onewaytest
 	cp -R onewaytest $(PATMOSHOME)/c/apps
-	cd $(PATMOSHOME) && $(MAKE) config app download APP=onewaytest
+	cd $(PATMOSHOME) && $(MAKE) app config download APP=onewaytest
