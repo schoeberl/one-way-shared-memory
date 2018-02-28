@@ -28,7 +28,7 @@ void print_hex(int val) {
 
 #define CNT 4
 #define ONEWAY_BASE *((volatile _SPM int *) 0xE8000000)
-#define WORDS 4
+#define WORDS 256
 
 // Shared data in main memory for the return value
 volatile _UNCACHED static int field;
@@ -67,10 +67,9 @@ void work(void* arg) {
   //[cycle=688558152, core=2, msg#= 3] RX: id 2, CNT 0, WORD 3, *mem_ptr 0x00000103
   // which make is seem like Core 2 only get words from core 1  
   for (int i=0; i<CNT; ++i) {
-    for (int j=0; j<WORDS; ++j) {
+    for (int j=0; j<4; ++j) {
       if(i == 0 && id == 2)
-	sync_printf(id, "RX: id %d, CNT %d, WORD %d, *mem_ptr 0x%08x\n", id, i, j, *mem_ptr);
-      mem_ptr++;
+	sync_printf(id, "RX: id %d, CNT %d, WORD %d, *mem_ptr 0x%08x\n", id, i, j, mem_ptr[i*WORDS + j]);
     }
   }
 }
