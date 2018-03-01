@@ -1,6 +1,6 @@
 /*
   One-Way Shared Memory
-  Runs on the patmos
+  Runs on patmos
 
   Copyright: CBS, DTU
   Authors: Rasmus Ulslev Pedersen, Martin Schoeberl
@@ -16,6 +16,7 @@
 
 //#include <machine/patmos.h>
 #include "onewaysim.h"
+#include "syncprint.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //TEST AND PLAYGROUND ON PATMOS

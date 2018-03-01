@@ -21,9 +21,6 @@
 #include <pthread.h>
 #endif
 
-// how many messages the printfbuffer can store for each core
-#define SYNCPRINTBUF 50
-
 // NoC setup
 // See:https://github.com/schoeberl/one-way-shared-memory/blob/master/src/main/scala/oneway/Network.scala
 
@@ -77,8 +74,8 @@
 
 // global memory
 // a slot for loop-back testing included
-extern unsigned long alltxmem[CORES][CORES - 1][MEMBUF]; 
-extern unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
+//extern unsigned long alltxmem[CORES][CORES - 1][MEMBUF]; 
+//extern unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 
 // patmos hardware registers provided via Scala HDL
 #ifdef RUNONPATMOS
@@ -108,9 +105,9 @@ typedef struct Core
   //   for instance when core 0 does its second word, then the first index (txmem[0][1])
   //     will actually mean core 1. The '[1]' in means the second word and thre is no
   //     mapping going on there
-  unsigned long **txmem;
+  volatile _SPM int **txmem;
   // rxmem is an unsigned long array of [CORES-1][MEMBUF]
-  unsigned long **rxmem;
+  volatile _SPM int **rxmem;
 } Core;
 
 // declare noc consisting of cores
@@ -119,10 +116,10 @@ extern Core core[CORES];
 // a struct for the handshake push message
 typedef struct handshakemsg_t
 {
-  unsigned long data0;
-  unsigned long data1;
-  unsigned long data2;
-  unsigned long pushid; // 0 means no message
+  unsigned int data0;
+  unsigned int data1;
+  unsigned int data2;
+  unsigned int pushid; // 0 means no message
 } handshakemsg_t;
 
 // a struct for handshaking acknowledgement
@@ -152,19 +149,13 @@ Core core[CORES];
 
 int coreid[CORES];
 
-
-void nocdone();
+void nocinit();
 void noccontrol();
+void nocdone();
 #ifndef RUNONPATMOS
 void simcontrol();
-void nocinit();
 #endif
 
-// functions in the target and simulator
-unsigned long getcycles();
-void sync_printf(int, const char *format, ...);
-void info_printf(const char *format, ...);
-void sync_printall();
 void corethreadtbs(void *coreid);
 void corethreadhsp(void *coreid);
 void corethreades(void *coreid);

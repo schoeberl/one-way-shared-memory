@@ -1,5 +1,5 @@
 /*
-  A software simulation of the One-Way Shared Memory
+  Software layer for One-Way Shared Memory
   Runs both on the PC and on patmos
 
   Copyright: CBS, DTU
@@ -14,29 +14,21 @@
 #include <stdarg.h>
 #include <string.h>
 #include <math.h>
-
+#include "libcorethread/corethread.h"
 #ifndef RUNONPATMOS
 #include <time.h>
 #endif
 
 #include "onewaysim.h"
-
-// TODO see
-// https://github.com/t-crest/patmos/blob/master/c/apps/oneway/hello_oneway.c
-// Change the memory to a pointer base
-// #define ONEWAY_BASE *((volatile _SPM int *) 0xE8000000)
-// For the shared fields we need to use _UNCACHED: 
-// volatile _UNCACHED static int field;
-
+#include "syncprint.h"
 
 #ifdef RUNONPATMOS
-#define ONEWAY_BASE *((volatile _SPM int *) 0xE8000000)
-// todo: fix address when ready
-unsigned volatile _SPM int *alltxmem = ONEWAY_BASE;
-unsigned volatile _SPM int *allrxmem = ONEWAY_BASE;
+#define ONEWAY_BASE ((volatile _IODEV int *) 0xE8000000)
+volatile _SPM int *alltxmem = ONEWAY_BASE;
+volatile _SPM int *allrxmem = ONEWAY_BASE;
 #else
-unsigned long alltxmem[CORES][CORES - 1][MEMBUF];
-unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
+int alltxmem[CORES][CORES - 1][MEMBUF];
+int allrxmem[CORES][CORES - 1][MEMBUF];
 #endif
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
@@ -44,7 +36,7 @@ unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 
 int tbstrigger(int cid)
 {
-  unsigned long cyclecnt = getcycles();
+  unsigned int cyclecnt = getcycles();
   sync_printf(cid, "-->Time-synced trigger on core %d: Cycles = %lu\n", cid, cyclecnt);
   sync_printf(cid, "-->HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER = %lu\n", HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
   return cyclecnt;
@@ -125,7 +117,7 @@ void corethreadhsp(void *coreid)
   // only copy to the tx buffer if this is the pushcoreid
   if (cid == pushcoreid)
   {
-    memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
+    //memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
   }
   memtxprint(cid);
 
@@ -138,14 +130,14 @@ void corethreadhsp(void *coreid)
     {
       // new message id
       //   copy rx buffer
-      memcpy(&ackmsg, core[cid].rxmem[0], sizeof(ackmsg));
+      //memcpy(&ackmsg, core[cid].rxmem[0], sizeof(ackmsg));
       // ack it (if we are the test core set up to do so)
       ackmsg.ackid = monitorlastword;
       lastackid = monitorlastword;
       // tx if we are the core set up to do so
       if (cid == ackcoreid)
       {
-        memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
+        //memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
       }
     }
     //sync_printf(cid, "Core %ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  ackmsg.reqid=%lu,\n  ackmsg.respid=%lu,\n  ackmsg.data1=%lu,\n  ackmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, ackmsg.reqid, ackmsg.respid, ackmsg.data1, ackmsg.data2);
@@ -232,7 +224,7 @@ void corethreadsdb(void *coreid)
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifdef RUNONPATMOS
-static corethread_t corethread[CORES];
+//static corethread_t corethread[CORES];
 #else
 static pthread_t corethread[CORES];
 #endif
@@ -242,17 +234,19 @@ void nocmem()
   // map ms's alltxmem and allrxmem to each core's local memory
   for (int i = 0; i < CORES; i++)
   { // allocate pointers to each core's membuf array
-    core[i].txmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    core[i].rxmem = (unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    core[i].txmem[0] = (volatile _IODEV int *) ONEWAY_BASE;
+    //(unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    core[i].rxmem[0] = (volatile _IODEV int *) ONEWAY_BASE;
+    //(unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
     for (int j = 0; j < CORES - 1; j++)
     { // assign membuf addresses from allrx and alltx to rxmem and txmem
-      core[i].txmem[j] = alltxmem[i][j];
-      core[i].rxmem[j] = allrxmem[i][j];
+      //core[i].txmem[j] = alltxmem[i][j];
+      //core[i].rxmem[j] = allrxmem[i][j];
       for (int m = 0; m < MEMBUF; m++)
       { // zero the tx and rx membuffer slots
         // see the comment on 'struct Core'
-        core[i].txmem[j][m] = 0;
-        core[i].rxmem[j][m] = 0;
+        //core[i].txmem[j][m] = 0;
+        //core[i].rxmem[j][m] = 0;
       }
     }
   }
@@ -274,7 +268,7 @@ void nocinit()
   {
     coreid[c] = c;
 #ifdef RUNONPATMOS
-    corethread[c] = c; // which core it will run on
+    //corethread[c] = c; // which core it will run on
 #endif
   }
 
@@ -282,7 +276,7 @@ void nocinit()
   for (int c = 1; c < CORES; c++)
   {
 #ifdef RUNONPATMOS
-    corethread_create(&corethread[c], &corethreadtbs, (void *)&coreid[c]);
+    corethread_create(c, &corethreadtbs, (void *)&coreid[c]);
 #else
     // the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void *
     pthread_create(&corethread[c], NULL, (void *(*)(void *)) & corethreadtbs, (void *)&coreid[c]);
@@ -311,7 +305,7 @@ void nocdone()
     info_printf("core thread %d to join...\n", c);
 // the cores *should* join here...
 #ifdef RUNONPATMOS
-    corethread_join(corethread[c], (void **)&retval);
+    corethread_join(c, (void **)&retval);
 #else
     pthread_join(corethread[c], NULL);
 #endif
@@ -457,111 +451,3 @@ void printpatmoscounters()
   sync_printf(0, "TDMROUND_REGISTER    = %d\n", TDMROUND_REGISTER);
 }
 
-//print support so the threads on all cores can use printf
-//  call sync_printall to print them after the most
-//  important code has run.
-//  don't not use sync_printf when running cycle accurate code (e.g. wcet)
-static char strings[CORES + 1][SYNCPRINTBUF][80];
-// clock cycles
-static unsigned long timestamps[CORES + 1][SYNCPRINTBUF];
-// message counter per core
-static int mi[CORES + 1];
-// call it with the core id so there are no race conditions
-void sync_printf(int cid, const char *format, ...)
-{
-  if (mi[cid] < SYNCPRINTBUF)
-  {
-    //volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; // cycles 0xf002000c; // timer low word
-    //int val = *io_ptr;
-    int val = 0;
-    timestamps[cid][mi[cid]] = getcycles(); //(unsigned long)val;
-    va_list args;
-    va_start(args, format);
-    vsprintf(&strings[cid][mi[cid]][0], format, args);
-    va_end(args);
-    mi[cid]++;
-  }
-}
-
-// an extra print buffer for info and end of sim stuff
-void info_printf(const char *format, ...)
-{
-  // cid is equal to the number of CORES (i.e., the top buffer)
-  if (mi[CORES] < SYNCPRINTBUF)
-  {
-    timestamps[CORES][mi[CORES]] = getcycles(); //(unsigned long)val;
-    va_list args;
-    va_start(args, format);
-    vsprintf(&strings[CORES][mi[CORES]][0], format, args);
-    va_end(args);
-    mi[CORES]++;
-  }
-}
-
-// print minimum timestamp. go over the [core][msg] matrix and find the lowest timestamp
-// then print that message. keep a current msg index for each counter. increase it
-//   for the message that has just been printed.
-
-// call this from 0 when done
-void sync_printall()
-{
-  printf("in sync_printall()...\n");
-  bool print = true;
-  int closestcoreid = 0;
-  int closestmsgid = 0;
-  int minmark[CORES + 1]; // keep track of messages printed for each core
-
-  for (int c = 0; c < CORES + 1; c++)
-    minmark[c] = 0;
-
-  while (print)
-  {
-    unsigned long smallest = 0xffffffff;
-    for (int c = 0; c < CORES + 1; c++)
-    {
-      if (minmark[c] < mi[c])
-      {
-        if (timestamps[c][minmark[c]] <= smallest)
-        {
-          closestcoreid = c;                    // candidate
-          smallest = timestamps[c][minmark[c]]; // new smallest
-        }
-      }
-    }
-    if (closestcoreid == CORES) // info core?
-      printf("[cycle=%lu, info=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], 0,
-             minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
-    else // other cores
-      printf("[cycle=%lu, core=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], closestcoreid,
-             minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
-
-    usleep(1000); // perhaps not needed
-
-    minmark[closestcoreid]++;
-    print = false;
-    for (int c = 0; c < CORES + 1; c++)
-    {
-      // are we done?
-      if (minmark[c] < mi[c])
-      {
-        print = true;
-        break;
-      }
-    }
-  }
-
-  //printf("leaving sync_printall()...\n");
-}
-
-// used for synchronizing printf from the different cores
-unsigned long getcycles()
-{
-#ifdef RUNONPATMOS
-  volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; 
-  return (unsigned long)*io_ptr;
-#else
-  clock_t now_t;
-  now_t = clock();
-  return (unsigned long)now_t;
-#endif
-}

@@ -102,7 +102,7 @@ void sync_printall()
              minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
     
     // perhaps not needed, but afraid of overflowing uart buffer?
-    usleep(1000);
+    //usleep(1000);
     
     minmark[closestcoreid]++;
     print = false;
@@ -156,7 +156,7 @@ void sync_print_core(int id)
                closestcoreid, minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
     }
     // perhaps not needed, but afraid of overflowing uart buffer?
-    usleep(1000);
+    //usleep(1000);
     
     minmark[closestcoreid]++;
     print = false;
