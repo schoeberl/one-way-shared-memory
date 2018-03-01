@@ -19,9 +19,9 @@
 #define PRINTCORES 4
 // How many lines the printfbuffer can store for each core (0, 1, 2, ...)
 //   and one "extra for info-printing on core 0
-#define SYNCPRINTBUF 50
+#define SYNCPRINTBUF 600
 // configure max. chars per line
-#define LINECHARS    80
+#define LINECHARS    100
  
 // Example: sync_printf(cid, "Core %d got new buffer...\n", cid);
 void sync_printf(int, const char *format, ...);
@@ -29,4 +29,9 @@ void sync_printf(int, const char *format, ...);
 void info_printf(const char *format, ...);
 // Call from core 0 after all threads have joined and the "mission" is over
 void sync_printall();
+// Printing just for one core at a time
+void sync_print_core(int id);
+// get cycles (patmos) or time (pc)
+unsigned int getcycles();
 #endif
+
