@@ -85,8 +85,9 @@ void nocmeminit()
 // function pointer to one of the test cases
 void nocinit()
 {
-  info_printf("in nocinit()...\n");
-  //inittxrxmaps();
+  printf("in nocinit()...\n");
+  txrxmapsinit();
+  showmappings();
 
   nocmeminit();
 
@@ -111,15 +112,15 @@ void nocstart(){
 
 void nocwaitdone()
 {
-  info_printf("waiting for slave cores to join ...\n");
+  printf("waiting for slave cores to join ...\n");
   int *retval;
   // now let the others join
   for (int c = 1; c < CORES; c++)
   {
-    info_printf("slave core thread %d to join...\n", c);
+    printf("slave core thread %d to join...\n", c);
     // the cores join here when done...
     corethread_join(c, (void **)&retval);
-    info_printf("slave core thread %d joined\n", c);
+    printf("slave core thread %d joined\n", c);
   }
 }
 
@@ -146,9 +147,12 @@ int main(int argc, char *argv[])
     printf("Sync print from core %d:\n", i);
     sync_print_core(i);
   }
-
+  
+  //sync_printall();
+   
   printf("****************************************\n");
   printf("****************************************\n");
+  
   return 0;
 }
 

@@ -26,7 +26,7 @@
 // Example: sync_printf(cid, "Core %d got new buffer...\n", cid);
 void sync_printf(int, const char *format, ...);
 // Example: info_printf("core thread %d joined\n", cid)
-void info_printf(const char *format, ...);
+//void info_printf(const char *format, ...);
 // Call from core 0 after all threads have joined and the "mission" is over
 void sync_printall();
 // Printing just for one core at a time

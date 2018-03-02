@@ -27,9 +27,11 @@
 volatile _SPM int *alltxmem = ONEWAY_BASE;
 volatile _SPM int *allrxmem = ONEWAY_BASE;
 #else
-int alltxmem[CORES][CORES - 1][MEMBUF];
-int allrxmem[CORES][CORES - 1][MEMBUF];
+int alltxmem[CORES][CORES-1][MEMBUF];
+int allrxmem[CORES][CORES-1][MEMBUF];
 #endif
+
+static volatile _UNCACHED int testval = -1;
 
 void spinwork(unsigned int waitcycles){
   unsigned int start = getcycles();
@@ -42,7 +44,7 @@ void spinwork(unsigned int waitcycles){
 
 void core0control()
 {
-  info_printf("core 0 is done\n");
+  sync_printf(0, "core 0 is done\n");
   // signal to stop the slave cores
   runcores = false; 
 }
@@ -52,8 +54,9 @@ void txwork(int id){
   int msg = 0;
   for (int j=0; j<WORDS; ++j) {
     for (int i=0; i<TDMSLOTS; ++i) {
-      //                   tx core        TDM slot     TDM slot word
-      txMem[i*WORDS + j] = id*0x1000000 + i*0x100000 + j*0x10000 + msg;
+      //                   tx core        TDM slot     TDM slot word  "Message"
+      //                                  TDMSLOTS     WORDS               
+      txMem[i*WORDS + j] = id*0x1000000 + i*0x100000 + j*0x10000      + msg;
       msg++;
     }
   }
@@ -61,13 +64,21 @@ void txwork(int id){
 
 void rxwork(int id){
   volatile _SPM int *rxMem = (volatile _IODEV int *) ONEWAY_BASE;
+  volatile int tmp = 0;
+  for (int j=0; j<WORDS; ++j)
+    for (int i=0; i<TDMSLOTS; ++i)
+      tmp = rxMem[i*WORDS + j];
+      
   for (int j=0; j<WORDS; ++j) {
     for (int i=0; i<TDMSLOTS; ++i) {
-      if(j < 4){	    
+      volatile unsigned int val = core[id].rx[i][j];
+      if(rxMem[i*WORDS + j] != val)
+        sync_printf(id, "Error!\n");
+      if(j < 4){
         sync_printf(id, "RX: TDM slot %d, TDM slot word %d, rxMem[0x%04x] 0x%04x_%04x\n", 
-                         i, j, i*WORDS + j, rxMem[i*WORDS + j]>>16, rxMem[i*WORDS + j]&0xFFFF);
-        sync_printf(id, "         unit test core[id=%02d].rx[i=%02d][j=%03d] 0x%04x_%04x\n", 
-                         id, i, j, rxMem[i*WORDS + j]>>16, rxMem[i*WORDS + j]&0xFFFF);     
+                         i, j, i*WORDS + j, val>>16, val&0xFFFF);
+        sync_printf(id, "      rx unit test core[id=%02d].rx[i=%02d][j=%03d] 0x%04x_%04x (tx'ed from core %d)\n", 
+                         id, i, j, val>>16, val&0xFFFF, gettxcorefromrxcoreslot(id, i));
       }               
     }
   }
@@ -123,7 +134,6 @@ void corethreadtbswork(void *noarg)
     if (cid == 0)
       core0control();
   }
-
   sync_printf(cid, "leaving corethreadtbswork(%d)...\n", cid);
 }
 
@@ -158,7 +168,7 @@ void corethreadhsp(void *coreid)
   int ackcoreidindexmap = 0;//getrxslot(pushcoreid, cid, 0);
   int lastpushid = cid + 10;
   pushmsg.pushid = lastpushid; // so we are expecting a ack id of 10 + our core id
-  //memtxprint(cid);
+
   printf("\n");
   // only copy to the tx buffer if this is the pushcoreid
   if (cid == pushcoreid)
@@ -312,6 +322,7 @@ void initroutestrings(){
 // init rxslot and txcoreid lookup tables
 void txrxmapsinit()
 {
+  initroutestrings();
   // tx router grid:
   //   the idea here is that we follow the word/flit from its tx slot to its rx slot.
   //   this is done by tracking the grid index for each of the possible directins of
@@ -366,17 +377,17 @@ void showmappings(){
   for(int i = 0; i < CORES; i++){
     printf("Core %d TX TDM slots:\n", i);
     // show them like in the paper
-    for(int j = TDMSLOTS - 1; j >= 0; j--){
+    for(int j = 0; j < TDMSLOTS; j++){
       printf("  TDM tx slot %d: to rx core %d\n", 
-             j, getrxcorefromtxcoreslot(i, j)); 
+             j, tx_core_tdmslots_map[i][j]);//getrxcorefromtxcoreslot(i, j)); 
     }
   }
   for(int i = 0; i < CORES; i++){
     printf("Core %d RX TDM slots:\n", i);
     // show them like in the paper
-    for(int j = TDMSLOTS - 1; j >= 0; j--){
+    for(int j = 0; j < TDMSLOTS; j++){
       printf("  TDM rx slot %d: from tx core %d\n", 
-             j, gettxcorefromrxcoreslot(i, j)); 
+             j, rx_core_tdmslots_map[i][j]);//gettxcorefromrxcoreslot(i, j)); 
     }
   }
 }
@@ -386,7 +397,7 @@ int getrxcorefromtxcoreslot(int txcore, int txslot){
   return tx_core_tdmslots_map[txcore][txslot];
 }
 
-// get the tx core based on tx core and rx (TDM) slot index
+// get the tx core based on rx core and rx (TDM) slot index
 int gettxcorefromrxcoreslot(int rxcore, int rxslot){
   return rx_core_tdmslots_map[rxcore][rxslot];
 }

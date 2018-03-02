@@ -168,7 +168,7 @@ void playandtest();
 // uses the router string (e.g., "nel, nl, el", ...)
 // to generate the mappings that rxcorefromtxcoreslot and 
 // txcorefromrxcoreslot use.
-void inittxrxmaps();
+void txrxmapsinit();
 // get the rx core based on tx core and tx (TDM) slot index
 int getrxcorefromtxcoreslot(int txcore, int txslot);
 // get the tx core based on tx core and rx (TDM) slot index
