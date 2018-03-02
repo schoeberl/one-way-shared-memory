@@ -18,6 +18,10 @@
 #include "onewaysim.h"
 #include "syncprint.h"
 
+// the functions which are called by threads are appended "work"
+// cores other than core 0 are called "slave" cores because core 0 have a dual role
+//   both as a thread work core and as the noc control core.
+
 ///////////////////////////////////////////////////////////////////////////////
 //TEST AND PLAYGROUND ON PATMOS
 //just using this as a quick way to test some things
@@ -47,7 +51,7 @@ void playandtest()
   // test: how long does it take to read a word from shared memory
   volatile int index = 0;
   unsigned long starttestread0 = (unsigned long)*io_ptr;
-  volatile unsigned long testread0 = core[index].txmem[index][index];
+  volatile unsigned long testread0 = core[index].tx[index][index];
   unsigned long stoptestread0 = (unsigned long)*io_ptr;
   printf("starttestread0 %lu\n", starttestread0);
   printf("stoptestread0 %lu\n", stoptestread0);
@@ -56,12 +60,69 @@ void playandtest()
   volatile int writeindex = 0;
   volatile unsigned long writeval = 1;
   unsigned long starttestwrite0 = (unsigned long)*io_ptr;
-  core[index].txmem[writeindex][writeindex] = writeval;
+  core[index].tx[writeindex][writeindex] = writeval;
   unsigned long stoptestwrite0 = (unsigned long)*io_ptr;
   printf("starttestwrite0 %lu\n", starttestwrite0);
   printf("stoptestwrite0 %lu\n", stoptestwrite0);
 #endif
 }
+
+void nocmeminit()
+{
+  // map ms's core mem arrray for indexed access
+  for (int i = 0; i < CORES; i++)
+  { 
+    for (int j = 0; j < TDMSLOTS; j++)
+    { 
+      //core[i].txmem[j] will point to a row of WORDS words 
+      core[i].tx[j] = (volatile _IODEV int *) (ONEWAY_BASE + j*WORDS);
+      core[i].rx[j] = (volatile _IODEV int *) (ONEWAY_BASE + j*WORDS);
+    }
+  }
+}
+
+// patmos memory initialization
+// function pointer to one of the test cases
+void nocinit()
+{
+  info_printf("in nocinit()...\n");
+  //inittxrxmaps();
+
+  nocmeminit();
+
+  // init signals and counters
+  HYPERPERIOD_REGISTER = 0;
+  TDMROUND_REGISTER = 0;
+}
+
+// start the slave cores
+void nocstart(){
+  //start the other cores
+  //runcores = true;
+  runcores = false;
+
+  // start the slave cores 1..CORES-1
+  for (int c = 1; c < CORES; c++)
+    corethread_create(c, &corethreadtbswork, NULL);
+
+  // "start" ourself (core 0)
+  corethreadtbswork(NULL);
+}
+
+void nocwaitdone()
+{
+  info_printf("waiting for slave cores to join ...\n");
+  int *retval;
+  // now let the others join
+  for (int c = 1; c < CORES; c++)
+  {
+    info_printf("slave core thread %d to join...\n", c);
+    // the cores join here when done...
+    corethread_join(c, (void **)&retval);
+    info_printf("slave core thread %d joined\n", c);
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //patmos main
 ///////////////////////////////////////////////////////////////////////////////
@@ -69,22 +130,25 @@ void playandtest()
 // we are core 0
 int main(int argc, char *argv[])
 {
-  printf("***********************************************************\n");
-  printf("onewaymem: run usecase on patmos***************************\n");
-  printf("***********************************************************\n");
-  //start the other cores
-  runcores = true;
+  printf("****************************************\n");
+  printf("****onewaymem: run usecase on patmos****\n");
+  printf("****************************************\n");
+  printf("Init...\n");
   nocinit();
-  // "start" ourself (core 0)
-  corethreadtbs(&coreid[0]);
+  printf("Start...\n");
+  nocstart();
+  printf("Wait...\n");
   // core 0 is done, wait for the others
-  nocdone();
-  info_printf("done...\n");
-  sync_printall();
+  nocwaitdone();
+  printf("Done...\n");
+  
+  for (int i=0; i<CORES; ++i) {
+    printf("Sync print from core %d:\n", i);
+    sync_print_core(i);
+  }
 
-  printf("leaving main...\n");
-  printf("***********************************************************\n");
-  printf("***********************************************************\n");
+  printf("****************************************\n");
+  printf("****************************************\n");
   return 0;
 }
 

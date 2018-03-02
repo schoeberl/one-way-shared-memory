@@ -22,6 +22,9 @@ static unsigned long timestamps[PRINTCORES + 1][SYNCPRINTBUF];
 // message counter per core
 static int mi[PRINTCORES + 1];
 
+// make sync_printf and info_printf thread safe
+static volatile _UNCACHED int printtoken = -1;
+
 // used for synchronizing printf from the different cores
 unsigned int getcycles()
 {
@@ -38,31 +41,37 @@ unsigned int getcycles()
 // call it with the core id so there are no race conditions
 void sync_printf(int cid, const char *format, ...)
 {
+  while(printtoken != -1);
+  printtoken = cid;
   if (mi[cid] < SYNCPRINTBUF)
   {
     int val = 0;
     timestamps[cid][mi[cid]] = getcycles(); //(unsigned long)val;
     va_list args;
     va_start(args, format);
-    vsprintf(&strings[cid][mi[cid]][0], format, args);
+    vsnprintf(&strings[cid][mi[cid]][0], LINECHARS, format, args);
     va_end(args);
     mi[cid]++;
   }
+  printtoken = -1;
 }
 
 // an extra print buffer for info and end of sim stuff
 void info_printf(const char *format, ...)
 {
+  while(printtoken != -1);
+  printtoken = 0;
   // cid is equal to the number of CORES (i.e., the top buffer)
   if (mi[PRINTCORES] < SYNCPRINTBUF)
   {
     timestamps[PRINTCORES][mi[PRINTCORES]] = getcycles(); //(unsigned long)val;
     va_list args;
     va_start(args, format);
-    vsprintf(&strings[PRINTCORES][mi[PRINTCORES]][0], format, args);
+    vsnprintf(&strings[PRINTCORES][mi[PRINTCORES]][0], LINECHARS, format, args);
     va_end(args);
     mi[PRINTCORES]++;
   }
+  printtoken = -1;
 }
 
 // print minimum timestamp. go over the [core][msg] matrix and find the lowest timestamp
@@ -149,20 +158,21 @@ void sync_print_core(int id)
     }
     if (closestcoreid == id){
       if (closestcoreid == PRINTCORES) // info core?
-        printf("[cycle=%lu, info=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], 0,
+        printf("[cy%lu info #%02d] %s", 
+               timestamps[closestcoreid][minmark[closestcoreid]], 
                minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
       else // other cores
-        printf("[cycle=%lu, core=%d, msg#=%2d] %s", timestamps[closestcoreid][minmark[closestcoreid]], 
-               closestcoreid, minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
+        printf("[cy%lu id%02d #%02d] %s", 
+               timestamps[closestcoreid][minmark[closestcoreid]], 
+               closestcoreid, minmark[closestcoreid], 
+               strings[closestcoreid][minmark[closestcoreid]]);
     }
-    // perhaps not needed, but afraid of overflowing uart buffer?
-    //usleep(1000);
-    
+
     minmark[closestcoreid]++;
     print = false;
     for (int c = 0; c < PRINTCORES + 1; c++)
     {
-      // are we done?
+      // done?
       if (minmark[c] < mi[c])
       {
         print = true;
@@ -170,8 +180,8 @@ void sync_print_core(int id)
       }
     }
   }
-
-  //printf("leaving sync_printall()...\n");
 }
+
+
 
 

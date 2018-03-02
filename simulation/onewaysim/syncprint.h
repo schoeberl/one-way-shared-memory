@@ -21,7 +21,7 @@
 //   and one "extra for info-printing on core 0
 #define SYNCPRINTBUF 600
 // configure max. chars per line
-#define LINECHARS    100
+#define LINECHARS    120
  
 // Example: sync_printf(cid, "Core %d got new buffer...\n", cid);
 void sync_printf(int, const char *format, ...);

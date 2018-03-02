@@ -62,6 +62,92 @@ void simcontrol()
   sync_printf(0, "leaving noccontrol()...\n");
 }
 
+
+void nocmem()
+{
+  // map ms's alltxmem and allrxmem to each core's local memory
+  for (int i = 0; i < CORES; i++)
+  { // allocate pointers to each core's membuf array
+    core[i].txmem[0] = (volatile _IODEV int *) ONEWAY_BASE;
+    //(unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    core[i].rxmem[0] = (volatile _IODEV int *) ONEWAY_BASE;
+    //(unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
+    for (int j = 0; j < CORES - 1; j++)
+    { // assign membuf addresses from allrx and alltx to rxmem and txmem
+      //core[i].txmem[j] = alltxmem[i][j];
+      //core[i].rxmem[j] = allrxmem[i][j];
+      for (int m = 0; m < MEMBUF; m++)
+      { // zero the tx and rx membuffer slots
+        // see the comment on 'struct Core'
+        //core[i].txmem[j][m] = 0;
+        //core[i].rxmem[j][m] = 0;
+      }
+    }
+  }
+}
+
+// patmos memory initialization
+// function pointer to one of the test cases
+void nocinit()
+{
+  info_printf("in nocinit()...\n");
+  //inittxrxmaps();
+
+  nocmem();
+  
+
+  // init signals and counters
+  HYPERPERIOD_REGISTER = 0;
+  TDMROUND_REGISTER = 0;
+  for (int c = 0; c < CORES; c++)
+  {
+    coreid[c] = c;
+#ifdef RUNONPATMOS
+    //corethread[c] = c; // which core it will run on
+#endif
+  }
+
+  // start the "slave" cores
+  for (int c = 1; c < CORES; c++)
+  {
+#ifdef RUNONPATMOS
+    corethread_create(c, &corethreadtbs, NULL);
+#else
+    // the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void *
+    pthread_create(&corethread[c], NULL, (void *(*)(void *)) & corethreadtbs, (void *)&coreid[c]);
+#endif
+  }
+}
+
+void noccontrol()
+{
+#ifdef RUNONPATMOS
+  info_printf("noc control is done in HW when running on patmos\n");
+  runcores = false; // stop the cores here or somewhere else...
+#else
+  info_printf("simulation control when just running on host PC\n");
+  simcontrol();
+#endif
+}
+
+void nocdone()
+{
+  info_printf("waiting for cores to join ...\n");
+  int *retval;
+  // now let the others join
+  for (int c = 1; c < CORES; c++)
+  {
+    info_printf("core thread %d to join...\n", c);
+// the cores *should* join here...
+#ifdef RUNONPATMOS
+    corethread_join(c, (void **)&retval);
+#else
+    pthread_join(corethread[c], NULL);
+#endif
+    info_printf("core thread %d joined\n", c);
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //Simulator main
 ///////////////////////////////////////////////////////////////////////////////

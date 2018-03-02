@@ -35,17 +35,17 @@
 //   a TDMROUND.
 //
 //   Example TX setup for one core in a 2x2 NoC configuration:
-//   CORES = 4
-//   MEMBUF = 4
-//                               TDMROUND 
-//               MEMBUF[0] MEMBUF[1] MEMBUF[2] MEMBUF[3]  
-//              +---------+---------+---------+---------+
-//              |TX slot 2|TX slot 2|TX slot 2|TX slot 2|
-//              +---------+---------+---------+---------+
-//   TDM slots: |TX slot 1|TX slot 1|TX slot 1|TX slot 1|
-//              +---------+---------+---------+---------+
-//              |TX slot 0|TX slot 0|TX slot 0|TX slot 0|
-//              +---------+---------+---------+---------+
+//   CORES = 4, also called CNT
+//   MEMBUF = 4 (up to 256), also called WORDS
+//                                   HYPERPERIOD 
+//                   MEMBUF[0] MEMBUF[1] MEMBUF[2] MEMBUF[3] ... WORDS - 1  
+//                  +---------+---------+---------+---------+---
+//                  |TX slot 0|TX slot 0|TX slot 0|TX slot 0|
+//   TDMROUND:      +---------+---------+---------+---------+---
+//     TDM slots    |TX slot 1|TX slot 1|TX slot 1|TX slot 1|
+//     CORES -1     +---------+---------+---------+---------+---
+//                  |TX slot 2|TX slot 2|TX slot 2|TX slot 2|
+//                  +---------+---------+---------+---------+---
 //   
 //   The routing in the one-way-mem NoC grid is defined by FOURNODES (for a 2x2 grid).
 //   The NoC starts with the transmission of the word in TX slot 0 for MEMBUF[0] for
@@ -58,13 +58,14 @@
 //   starts). 
 #define FOURNODES "nel|"\
                   "  nl|"\
-		  "   el|"
+		          "   el|"
 #define FOURNODES_N 4
 
 // do edit this to set up the NoC grid and buffer
 #define ROUTESSTRING FOURNODES
 #define CORES FOURNODES_N
-#define MEMBUF 4 
+#define MEMBUF 256
+#define WORDS MEMBUF 
 
 // do not edit
 // grid side size 
@@ -105,9 +106,9 @@ typedef struct Core
   //   for instance when core 0 does its second word, then the first index (txmem[0][1])
   //     will actually mean core 1. The '[1]' in means the second word and thre is no
   //     mapping going on there
-  volatile _SPM int **txmem;
+  volatile _SPM int *tx[TDMSLOTS];
   // rxmem is an unsigned long array of [CORES-1][MEMBUF]
-  volatile _SPM int **rxmem;
+  volatile _SPM int *rx[TDMSLOTS];
 } Core;
 
 // declare noc consisting of cores
@@ -150,29 +151,40 @@ Core core[CORES];
 int coreid[CORES];
 
 void nocinit();
+void nocstart();
 void noccontrol();
-void nocdone();
+void nocwaitdone();
 #ifndef RUNONPATMOS
 void simcontrol();
 #endif
 
-void corethreadtbs(void *coreid);
-void corethreadhsp(void *coreid);
-void corethreades(void *coreid);
-void corethreadsdb(void *coreid);
+void corethreadtbswork(void *noarg);
+void corethreadhspwork(void *noarg);
+void corethreadeswork(void *noarg);
+void corethreadsdbwork(void *noarg);
 
 void playandtest();
 
-void memtxprint(int coreid);
-void memrxprint(int coreid);
-void memallprint();
-
+// uses the router string (e.g., "nel, nl, el", ...)
+// to generate the mappings that rxcorefromtxcoreslot and 
+// txcorefromrxcoreslot use.
 void inittxrxmaps();
-int getrxslot(int txcoreid, int rxcoreid, int txslot);
-int gettxcoreid(int rxcoreid, int rxslot);
+// get the rx core based on tx core and tx (TDM) slot index
+int getrxcorefromtxcoreslot(int txcore, int txslot);
+// get the tx core based on tx core and rx (TDM) slot index
+int gettxcorefromrxcoreslot(int rxcore, int rxslot);
 
 // the two new ones (todo: merge)
 void initroutestrings();
 void showmappings();
+
+#ifdef RUNONPATMOS
+#define ONEWAY_BASE ((volatile _IODEV int *) 0xE8000000)
+extern volatile _SPM int *alltxmem;
+extern volatile _SPM int *allrxmem;
+#else
+extern int alltxmem[CORES][CORES - 1][MEMBUF];
+extern int allrxmem[CORES][CORES - 1][MEMBUF];
+#endif
 
 #endif

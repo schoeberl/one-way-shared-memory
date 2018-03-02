@@ -30,26 +30,71 @@ volatile _SPM int *allrxmem = ONEWAY_BASE;
 int alltxmem[CORES][CORES - 1][MEMBUF];
 int allrxmem[CORES][CORES - 1][MEMBUF];
 #endif
+
+void spinwork(unsigned int waitcycles){
+  unsigned int start = getcycles();
+  while((getcycles()-start) <= waitcycles);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
 
-int tbstrigger(int cid)
+void core0control()
+{
+  info_printf("core 0 is done\n");
+  // signal to stop the slave cores
+  runcores = false; 
+}
+
+void txwork(int id){
+  volatile _SPM int *txMem = (volatile _IODEV int *) ONEWAY_BASE;
+  int msg = 0;
+  for (int j=0; j<WORDS; ++j) {
+    for (int i=0; i<TDMSLOTS; ++i) {
+      //                   tx core        TDM slot     TDM slot word
+      txMem[i*WORDS + j] = id*0x1000000 + i*0x100000 + j*0x10000 + msg;
+      msg++;
+    }
+  }
+}	
+
+void rxwork(int id){
+  volatile _SPM int *rxMem = (volatile _IODEV int *) ONEWAY_BASE;
+  for (int j=0; j<WORDS; ++j) {
+    for (int i=0; i<TDMSLOTS; ++i) {
+      if(j < 4){	    
+        sync_printf(id, "RX: TDM slot %d, TDM slot word %d, rxMem[0x%04x] 0x%04x_%04x\n", 
+                         i, j, i*WORDS + j, rxMem[i*WORDS + j]>>16, rxMem[i*WORDS + j]&0xFFFF);
+        sync_printf(id, "         unit test core[id=%02d].rx[i=%02d][j=%03d] 0x%04x_%04x\n", 
+                         id, i, j, rxMem[i*WORDS + j]>>16, rxMem[i*WORDS + j]&0xFFFF);     
+      }               
+    }
+  }
+}
+
+int tbstriggerwork(int cid)
 {
   unsigned int cyclecnt = getcycles();
-  sync_printf(cid, "-->Time-synced trigger on core %d: Cycles = %lu\n", cid, cyclecnt);
-  sync_printf(cid, "-->HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER = %lu\n", HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+  sync_printf(cid, "Time-synced trigger on core %d: Cycles = %lu\n", cid, cyclecnt);
+  sync_printf(cid, "HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER = %lu\n",
+              HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
   return cyclecnt;
 }
 
 // the cores
 // detect changes in HYPERPERIOD_REGISTER and TDMROUND_REGISTER
-void corethreadtbs(void *coreid)
+void corethreadtbswork(void *noarg)
 {
-  int cid = *((int *)coreid);
+  int cid = get_cpuid();
   sync_printf(cid, "in corethreadtbs(%d)...\n", cid);
   unsigned long tdmround = 0xFFFFFFFF;
   unsigned long hyperperiod = 0xFFFFFFFF;
+
+  txwork(get_cpuid());
+  spinwork(TDMSLOTS*WORDS);
+  rxwork(get_cpuid());
+
   // all cores except core 0
   //while (cid > 0 && runcores)
   while (runcores)
@@ -59,33 +104,34 @@ void corethreadtbs(void *coreid)
     // the cores print their output after the cycle count changes are (simultaneously) detected
     if (tdmround != TDMROUND_REGISTER)
     {
-      tbstrigger(cid);
+      tbstriggerwork(cid);
       //sync_printf(cid, "Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
       tdmround = TDMROUND_REGISTER;
     }
 
     if (hyperperiod != HYPERPERIOD_REGISTER)
     {
-      tbstrigger(cid);
+      tbstriggerwork(cid);
       //sync_printf(cid, "Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
       hyperperiod = HYPERPERIOD_REGISTER;
     }
 
-    if (cid > 0)
+    // the other cores will sleep
+    if (cid != 0)
       usleep(10);
 
     if (cid == 0)
-      noccontrol();
+      core0control();
   }
 
-  sync_printf(cid, "leaving corethreadtbs(%d)...\n", cid);
+  sync_printf(cid, "leaving corethreadtbswork(%d)...\n", cid);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Handshaking Protocol
 ///////////////////////////////////////////////////////////////////////////////
 
-void triggerhandshake(int cid)
+void triggerhandshakework(int cid)
 {
   sync_printf(cid, "handshaketriggger in core %d...\n", cid);
 }
@@ -112,20 +158,20 @@ void corethreadhsp(void *coreid)
   int ackcoreidindexmap = 0;//getrxslot(pushcoreid, cid, 0);
   int lastpushid = cid + 10;
   pushmsg.pushid = lastpushid; // so we are expecting a ack id of 10 + our core id
-  memtxprint(cid);
+  //memtxprint(cid);
   printf("\n");
   // only copy to the tx buffer if this is the pushcoreid
   if (cid == pushcoreid)
   {
     //memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
   }
-  memtxprint(cid);
+  //memtxprint(cid);
 
   int lastackid = 0; // 0 means no message
 
   while (runcores)
   {
-    int monitorlastword = core[cid].rxmem[ackcoreidindexmap][0];
+    int monitorlastword = core[cid].rx[ackcoreidindexmap][0];
     if (monitorlastword != lastackid)
     {
       // new message id
@@ -149,12 +195,12 @@ void corethreadhsp(void *coreid)
 ///////////////////////////////////////////////////////////////////////////////
 
 // called when there is change of state
-void triggerexchangeofstate(int cid)
+void triggerexchangeofstatework(int cid)
 {
   sync_printf(cid, "Core %d change of state...\n", cid);
 }
 
-void corethreades(void *coreid)
+void corethreadeswork(void *coreid)
 {
   int cid = *((int *)coreid);
   int step = 0;
@@ -169,11 +215,11 @@ void corethreades(void *coreid)
       //sync_printf(cid, "Core %ld sensor request: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  ackmsg.ackid=%lu,\n  ackmsg.ackid=%lu,\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, ackmsg.ackid, ackmsg.ackid);
       esmsg.sensorid = 10 + cid;     // to be able to recognize it easily on the tx side
       esmsg.sensorval = getcycles(); // the artificial "temperature" proxy
-      memcpy(core[cid].txmem, &esmsg, sizeof(esmsg));
+      memcpy(core[cid].tx, &esmsg, sizeof(esmsg));
     }
 
     // sensor read
-    if (core[cid].txmem[0][0] > 0)
+    if (core[cid].tx[0][0] > 0)
     {
       //sync_printf(cid, "Core %ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  ackmsg.reqid=%lu,\n  ackmsg.respid=%lu,\n  ackmsg.sensorid=%lu,\n  ackmsg.sensorval=%lu\n", cid, TDMROUND_REGISTER, TDMROUND_REGISTER, ackmsg.reqid, ackmsg.respid, ackmsg.data1, ackmsg.data2);
     }
@@ -186,12 +232,12 @@ void corethreades(void *coreid)
 ///////////////////////////////////////////////////////////////////////////////
 
 //called when there is a new buffer
-void triggeronbuffer(int cid)
+void triggeronbufferwork(int cid)
 {
   sync_printf(cid, "Core %d new buffer...\n", cid);
 }
 
-void corethreadsdb(void *coreid)
+void corethreadsdbwork(void *noarg)
 {
   int cid = *((int *)coreid);
   sync_printf(cid, "Core %d started...\n", cid);
@@ -202,18 +248,18 @@ void corethreadsdb(void *coreid)
   int lastword = 0;
   while (runcores)
   {
-    int monitorlastword = core[cid].rxmem[0][0];
+    int monitorlastword = core[cid].rx[0][0];
     if (monitorlastword != lastword)
     {
-      memcpy(&buffer_in, core[cid].rxmem, sizeof(buffer_t));
-      triggeronbuffer(cid);
+      memcpy(&buffer_in, core[cid].rx, sizeof(buffer_t));
+      triggeronbufferwork(cid);
     }
     // tx new data for other buffers at another core
     // step data used here
-    core[cid].txmem[0][0] = 10000 + step * 100 + cid;
-    core[cid].txmem[1][0] = 10000 + step * 100 + cid;
-    core[cid].txmem[2][0] = 10000 + step * 100 + cid;
-    core[cid].txmem[3][0] = 10000 + step * 100 + cid;
+    core[cid].tx[0][0] = 10000 + step * 100 + cid;
+    core[cid].tx[1][0] = 10000 + step * 100 + cid;
+    core[cid].tx[2][0] = 10000 + step * 100 + cid;
+    core[cid].tx[3][0] = 10000 + step * 100 + cid;
     step++;
   }
 }
@@ -229,95 +275,11 @@ void corethreadsdb(void *coreid)
 static pthread_t corethread[CORES];
 #endif
 
-void nocmem()
-{
-  // map ms's alltxmem and allrxmem to each core's local memory
-  for (int i = 0; i < CORES; i++)
-  { // allocate pointers to each core's membuf array
-    core[i].txmem[0] = (volatile _IODEV int *) ONEWAY_BASE;
-    //(unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    core[i].rxmem[0] = (volatile _IODEV int *) ONEWAY_BASE;
-    //(unsigned long **)malloc((CORES - 1) * sizeof(unsigned long **));
-    for (int j = 0; j < CORES - 1; j++)
-    { // assign membuf addresses from allrx and alltx to rxmem and txmem
-      //core[i].txmem[j] = alltxmem[i][j];
-      //core[i].rxmem[j] = allrxmem[i][j];
-      for (int m = 0; m < MEMBUF; m++)
-      { // zero the tx and rx membuffer slots
-        // see the comment on 'struct Core'
-        //core[i].txmem[j][m] = 0;
-        //core[i].rxmem[j][m] = 0;
-      }
-    }
-  }
-}
-
-// patmos memory initialization
-// function pointer to one of the test cases
-void nocinit()
-{
-  info_printf("in nocinit()...\n");
-  //inittxrxmaps();
-
-  nocmem();
-
-  // init signals and counters
-  HYPERPERIOD_REGISTER = 0;
-  TDMROUND_REGISTER = 0;
-  for (int c = 0; c < CORES; c++)
-  {
-    coreid[c] = c;
-#ifdef RUNONPATMOS
-    //corethread[c] = c; // which core it will run on
-#endif
-  }
-
-  // start the "slave" cores
-  for (int c = 1; c < CORES; c++)
-  {
-#ifdef RUNONPATMOS
-    corethread_create(c, &corethreadtbs, (void *)&coreid[c]);
-#else
-    // the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void *
-    pthread_create(&corethread[c], NULL, (void *(*)(void *)) & corethreadtbs, (void *)&coreid[c]);
-#endif
-  }
-}
-
-void noccontrol()
-{
-#ifdef RUNONPATMOS
-  info_printf("noc control is done in HW when running on patmos\n");
-  runcores = false; // stop the cores here or somewhere else...
-#else
-  info_printf("simulation control when just running on host PC\n");
-  simcontrol();
-#endif
-}
-
-void nocdone()
-{
-  info_printf("waiting for cores to join ...\n");
-  int *retval;
-  // now let the others join
-  for (int c = 1; c < CORES; c++)
-  {
-    info_printf("core thread %d to join...\n", c);
-// the cores *should* join here...
-#ifdef RUNONPATMOS
-    corethread_join(c, (void **)&retval);
-#else
-    pthread_join(corethread[c], NULL);
-#endif
-    info_printf("core thread %d joined\n", c);
-  }
-}
-
 ///////////////////////////////////////////////////////////////////
 // utility stuff
 ///////////////////////////////////////////////////////////////////
 
-// new mappings (still not perfect)
+// mappings
 static const char *rstr = ROUTESSTRING;
 
 static int tx_core_tdmslots_map[CORES][TDMSLOTS];
@@ -348,7 +310,7 @@ void initroutestrings(){
 }
 
 // init rxslot and txcoreid lookup tables
-void inittxrxmaps()
+void txrxmapsinit()
 {
   // tx router grid:
   //   the idea here is that we follow the word/flit from its tx slot to its rx slot.
@@ -392,8 +354,8 @@ void inittxrxmaps()
       
         // fill in the rx core id in the tx slot map
         tx_core_tdmslots_map[txcoreid][txtdmslot] = rxcoreid;
-	// fill in the tx core id in the rx slot map
-	rx_core_tdmslots_map[rxcoreid][rxtdmslot] = txcoreid;
+	    // fill in the tx core id in the rx slot map
+	    rx_core_tdmslots_map[rxcoreid][rxtdmslot] = txcoreid;
      }
     }
   }
@@ -405,49 +367,26 @@ void showmappings(){
     printf("Core %d TX TDM slots:\n", i);
     // show them like in the paper
     for(int j = TDMSLOTS - 1; j >= 0; j--){
-      printf("  TDM slot %d: to core %d\n", j, tx_core_tdmslots_map[i][j]); 
+      printf("  TDM tx slot %d: to rx core %d\n", 
+             j, getrxcorefromtxcoreslot(i, j)); 
     }
   }
   for(int i = 0; i < CORES; i++){
     printf("Core %d RX TDM slots:\n", i);
     // show them like in the paper
     for(int j = TDMSLOTS - 1; j >= 0; j--){
-      printf("  TDM slot %d: from core %d\n", j, rx_core_tdmslots_map[i][j]); 
+      printf("  TDM rx slot %d: from tx core %d\n", 
+             j, gettxcorefromrxcoreslot(i, j)); 
     }
   }
 }
 
-void memtxprint(int coreid)
-{
-  for (int m = 0; m < MEMBUF; m++)
-    for (int i = 0; i < CORES - 1; i++)
-    {
-      sync_printf(0, "core[coreid:%d].txmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].txmem[i][m]);
-    }
+// get the rx core based on tx core and tx (TDM) slot index
+int getrxcorefromtxcoreslot(int txcore, int txslot){
+  return tx_core_tdmslots_map[txcore][txslot];
 }
 
-void memrxprint(int coreid)
-{
-  for (int m = 0; m < MEMBUF; m++)
-    for (int i = 0; i < CORES - 1; i++)
-    {
-      sync_printf(0, "core[coreid:%d].rxmem[i:%d][m:%d] = %lu\n", coreid, i, m, core[coreid].rxmem[i][m]);
-    }
+// get the tx core based on tx core and rx (TDM) slot index
+int gettxcorefromrxcoreslot(int rxcore, int rxslot){
+  return rx_core_tdmslots_map[rxcore][rxslot];
 }
-
-void memallprint()
-{
-  for (int c = 0; c < CORES; c++)
-  {
-    memtxprint(c);
-    memrxprint(c);
-  }
-}
-
-void printpatmoscounters()
-{
-  // ms should probably name the counters PATMOS_IO_HYPERPERIOD or similar
-  sync_printf(0, "HYPERPERIOD_REGISTER = %d\n", HYPERPERIOD_REGISTER);
-  sync_printf(0, "TDMROUND_REGISTER    = %d\n", TDMROUND_REGISTER);
-}
-
