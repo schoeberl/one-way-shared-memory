@@ -42,39 +42,33 @@ void spinwork(unsigned int waitcycles){
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
 
-void core0controlwork()
-{
-  static int roundstate = 0;
-  const int MAXROUNDSTATE = 2;
-  sync_printf(0, "core 0 is done\n");
-  
-  if(roundstate == MAXROUNDSTATE){
-    // signal to stop the slave cores
-    runcores = false; 
-  }  
-    
-  roundstate++;
+int tbstriggerwork(int txcid) {
+  unsigned int cyclecnt = getcycles();
+  sync_printf(get_cpuid(), "Usecase: Time-synced (on hyperperiod) trigger on rx core %d from tx core %d!!!\n", 
+              get_cpuid(), txcid);
+  return cyclecnt;
 }
 
-void txwork(int id){
+void txwork(int id) {
   volatile _SPM int *txMem = (volatile _IODEV int *) ONEWAY_BASE;
-  int msg = 0;
+  static int msgid = 0;
   for (int j=0; j<WORDS; ++j) {
     for (int i=0; i<TDMSLOTS; ++i) {
+      // first word (txMem[i][0]) will be two bytes id, tdmslot, and word.
+      // last two bytes of that first word is used for msgid, which is used for 
+      // both checking the noc mapping, and also detecting a new message (on the msgid)
       //                   tx core        TDM slot     TDM slot word  "Message"
       //                                  TDMSLOTS     WORDS               
-      txMem[i*WORDS + j] = id*0x1000000 + i*0x100000 + j*0x10000      + msg;
-      msg++;
+      msgid < 0x10000 ? msgid++ : 0;
+      int jj = (j<0x100)?j:0xFF;
+      txMem[i*WORDS + j] = id*0x10000000 + i*0x1000000 + jj*0x10000 + msgid;
     }
   }
 }	
 
-void rxwork(int id){
+void rxwork(int id) {
   volatile _SPM int *rxMem = (volatile _IODEV int *) ONEWAY_BASE;
   volatile int tmp = 0;
-  for (int j=0; j<WORDS; ++j)
-    for (int i=0; i<TDMSLOTS; ++i)
-      tmp = rxMem[i*WORDS + j];
       
   for (int j=0; j<WORDS; ++j) {
     for (int i=0; i<TDMSLOTS; ++i) {
@@ -91,86 +85,108 @@ void rxwork(int id){
   }
 }
 
-int tbstriggerwork(int cid)
-{
-  unsigned int cyclecnt = getcycles();
-  sync_printf(cid, "Time-synced trigger on core %d: Cycles = %lu\n", cid, cyclecnt);
-  sync_printf(cid, "HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER = %lu\n",
-              HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
-  return cyclecnt;
+//  saves the current hyperperiod for each TDMSLOT in prevhyperperiod[TDMSLOTS]
+//  as seen from each rx core
+void recordhyperperiodwork(unsigned int* hyperperiods){
+  for(int i = 0; i < TDMSLOTS; i++){
+    hyperperiods[i] = core[get_cpuid()].rx[i][0];
+    sync_printf(get_cpuid(), "prevhyperperiod[i=%d] = 0x%08x (from core %d)\n", 
+                i, hyperperiods[i], gettxcorefromrxcoreslot(get_cpuid(), i));        
+  }
 }
 
 // the cores
 // detect changes in HYPERPERIOD_REGISTER and TDMROUND_REGISTER
-void corethreadtbswork(void *noarg)
-{
+void corethreadtbswork(void *noarg) {
   int state = 0;
 
   int cid = get_cpuid();
   sync_printf(cid, "in corethreadtbs(%d)...\n", cid);
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
+  unsigned int tdmround[TDMSLOTS];
+  // previous hyperperiod (used to detect/poll for new hyperperiod)
+  unsigned int prevhyperperiod[TDMSLOTS];
+  volatile _SPM int* hyperperiodptr[TDMSLOTS];
+  
+  for(int i = 0; i < TDMSLOTS; i++)
+    hyperperiodptr[i] = &core[get_cpuid()].rx[i][0];
 
-  while (runcores)
-  {
+  while (runcores) {
     // overall "noc state" handled by poor core 0 as a sidejob 
-    if (cid == 0)
-      core0controlwork();
-    // the other cores will sleep
-    else
-      usleep(10);  
+    static int roundstate = 0;
+    const int MAXROUNDSTATE = 4;
+    if (cid == 0){
+      if(roundstate == MAXROUNDSTATE) {
+        // signal to stop the slave cores
+        runcores = false; 
+        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+      }  
+      roundstate++;
+    }
       
     // individual core states incl 0
-    switch (state)
-    {
-      case 0:
+    switch (state) {
+      case 0: {
         // state work
+        sync_printf(cid, "core %d tx state 0\n", cid);
         txwork(get_cpuid());
         spinwork(TDMSLOTS*WORDS);
-        
         // next state
-        if (true){
+        if (true) {
           state++;
         }
         break;
+      }
         
-      case 1:
+      case 1: {
         // state work
+        sync_printf(cid, "core %d rx state 1\n", cid);        
         rxwork(get_cpuid());
-        
-        //sync_printf(cid, "while: in corethreadtbs(%d)...\n", cid);
-        // the cores are aware of the global cycle times for time-based-synchronization
-        // the cores print their output after the cycle count changes are (simultaneously) detected
-        if (tdmround != TDMROUND_REGISTER){
-          tbstriggerwork(cid);
-          //sync_printf(cid, "Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
-          tdmround = TDMROUND_REGISTER;
-        }
-
-        if (hyperperiod != HYPERPERIOD_REGISTER) {
-          tbstriggerwork(cid);
-          //sync_printf(cid, "Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
-          hyperperiod = HYPERPERIOD_REGISTER;
-        }
-
+        recordhyperperiodwork(&prevhyperperiod[0]);
+        spinwork(TDMSLOTS*WORDS);
         // next state    
         if (true) { 
           state++;
         }
         break;
+      }
         
-      case 2:
+      case 2: {
         // state work
-        
+        sync_printf(cid, "core %d tx state 2\n", cid);        
+        txwork(get_cpuid());
+        spinwork(TDMSLOTS*WORDS);
         //next state
         if (true) {
           state++;
         }
         break;
-        
-      default:
-          // no work, just "looping" until runcores == false
+      }
+      
+      case 3: {
+        // state work
+        int nextstatetbstrigger = -1;
+        sync_printf(cid, "core %d rx state 3\n", cid);    
+        for(int i = 0; i < TDMSLOTS; i++){
+          if(*hyperperiodptr[i] != prevhyperperiod[i]){
+            // use case 1 tbs trigger
+            tbstriggerwork(gettxcorefromrxcoreslot(get_cpuid(), i));
+            nextstatetbstrigger = 1;
+          }
+        }    
+        rxwork(get_cpuid());
+        recordhyperperiodwork(&prevhyperperiod[0]);
+        spinwork(TDMSLOTS*WORDS);
+ 
+        // next state    
+        if (nextstatetbstrigger) { 
+          state++;
+        }
+        break;  
+      }      
+      default: {
+          // no work, just "looping" until runcores == false is signaled from core 0
           break;
+      }
     }
   
   }

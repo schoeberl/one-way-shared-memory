@@ -42,7 +42,9 @@ unsigned int getcycles()
 // call it with the core id so there are no race conditions
 void sync_printf(int cid, const char *format, ...)
 {
-  while(printtoken != -1);
+  //uncomment next line to run with shared mutex
+  //while(printtoken != -1){};
+  
   printtoken = cid;
   if (mi[cid] < SYNCPRINTBUF)
   {
@@ -92,9 +94,6 @@ void sync_printall()
     printf("[cycle=%lu, core=%d, msg#=%2d] %s", 
            timestamps[closestcoreid][minmark[closestcoreid]], closestcoreid,
            minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
-    
-    // perhaps not needed, but afraid of overflowing uart buffer?
-    usleep(1000);
     
     minmark[closestcoreid]++;
     print = false;
