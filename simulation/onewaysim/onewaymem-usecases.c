@@ -42,11 +42,18 @@ void spinwork(unsigned int waitcycles){
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
 
-void core0control()
+void core0controlwork()
 {
+  static int roundstate = 0;
+  const int MAXROUNDSTATE = 2;
   sync_printf(0, "core 0 is done\n");
-  // signal to stop the slave cores
-  runcores = false; 
+  
+  if(roundstate == MAXROUNDSTATE){
+    // signal to stop the slave cores
+    runcores = false; 
+  }  
+    
+  roundstate++;
 }
 
 void txwork(int id){
@@ -97,42 +104,75 @@ int tbstriggerwork(int cid)
 // detect changes in HYPERPERIOD_REGISTER and TDMROUND_REGISTER
 void corethreadtbswork(void *noarg)
 {
+  int state = 0;
+
   int cid = get_cpuid();
   sync_printf(cid, "in corethreadtbs(%d)...\n", cid);
   unsigned long tdmround = 0xFFFFFFFF;
   unsigned long hyperperiod = 0xFFFFFFFF;
 
-  txwork(get_cpuid());
-  spinwork(TDMSLOTS*WORDS);
-  rxwork(get_cpuid());
-
-  // all cores except core 0
-  //while (cid > 0 && runcores)
   while (runcores)
   {
-    //sync_printf(cid, "while: in corethreadtbs(%d)...\n", cid);
-    // the cores are aware of the global cycle times for time-based-synchronization
-    // the cores print their output after the cycle count changes are (simultaneously) detected
-    if (tdmround != TDMROUND_REGISTER)
-    {
-      tbstriggerwork(cid);
-      //sync_printf(cid, "Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
-      tdmround = TDMROUND_REGISTER;
-    }
-
-    if (hyperperiod != HYPERPERIOD_REGISTER)
-    {
-      tbstriggerwork(cid);
-      //sync_printf(cid, "Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
-      hyperperiod = HYPERPERIOD_REGISTER;
-    }
-
-    // the other cores will sleep
-    if (cid != 0)
-      usleep(10);
-
+    // overall "noc state" handled by poor core 0 as a sidejob 
     if (cid == 0)
-      core0control();
+      core0controlwork();
+    // the other cores will sleep
+    else
+      usleep(10);  
+      
+    // individual core states incl 0
+    switch (state)
+    {
+      case 0:
+        // state work
+        txwork(get_cpuid());
+        spinwork(TDMSLOTS*WORDS);
+        
+        // next state
+        if (true){
+          state++;
+        }
+        break;
+        
+      case 1:
+        // state work
+        rxwork(get_cpuid());
+        
+        //sync_printf(cid, "while: in corethreadtbs(%d)...\n", cid);
+        // the cores are aware of the global cycle times for time-based-synchronization
+        // the cores print their output after the cycle count changes are (simultaneously) detected
+        if (tdmround != TDMROUND_REGISTER){
+          tbstriggerwork(cid);
+          //sync_printf(cid, "Core #%ld: HYPERPERIOD_REGISTER = %lu, TDMROUND_REGISTER(*) = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+          tdmround = TDMROUND_REGISTER;
+        }
+
+        if (hyperperiod != HYPERPERIOD_REGISTER) {
+          tbstriggerwork(cid);
+          //sync_printf(cid, "Core #%ld:HYPERPERIOD_REGISTER(*) = %lu, TDMROUND_REGISTER = %lu\n", cid, HYPERPERIOD_REGISTER, TDMROUND_REGISTER);
+          hyperperiod = HYPERPERIOD_REGISTER;
+        }
+
+        // next state    
+        if (true) { 
+          state++;
+        }
+        break;
+        
+      case 2:
+        // state work
+        
+        //next state
+        if (true) {
+          state++;
+        }
+        break;
+        
+      default:
+          // no work, just "looping" until runcores == false
+          break;
+    }
+  
   }
   sync_printf(cid, "leaving corethreadtbswork(%d)...\n", cid);
 }

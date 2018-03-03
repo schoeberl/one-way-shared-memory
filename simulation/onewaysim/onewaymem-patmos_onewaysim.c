@@ -99,8 +99,8 @@ void nocinit()
 // start the slave cores
 void nocstart(){
   //start the other cores
-  //runcores = true;
-  runcores = false;
+  runcores = true;
+  //runcores = false;
 
   // start the slave cores 1..CORES-1
   for (int c = 1; c < CORES; c++)
