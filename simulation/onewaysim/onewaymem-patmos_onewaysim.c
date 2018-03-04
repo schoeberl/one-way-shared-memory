@@ -98,16 +98,26 @@ void nocinit()
 
 // start the slave cores
 void nocstart(){
-  //start the other cores
+  // START STEPS 0, 1, and 2
+  
+  //0. start the other cores
   runcores = true;
-  //runcores = false;
 
-  // start the slave cores 1..CORES-1
+  // use case 1, time-based sync: corethreadtbswork
+  //void (*corefuncptr)(void *) = &corethreadtbswork;
+  // use case 2, handshake:       corethreadhswork
+  void (*corefuncptr)(void *) = &corethreadhswork;
+  // use case 3, state exchange:  corethreadeswork
+  //void (*corefuncptr)(void *) = &corethreadeswork;
+  // use case 4: corethreadsdbwork
+  //void (*corefuncptr)(void *) = &corethreaddbwork;
+
+  // 1. start the slave cores 1..CORES-1
   for (int c = 1; c < CORES; c++)
-    corethread_create(c, &corethreadtbswork, NULL);
+    corethread_create(c, corefuncptr, NULL);
 
-  // "start" ourself (core 0)
-  corethreadtbswork(NULL);
+  // 2. "start" ourself (core 0)
+  corefuncptr(NULL);
 }
 
 void nocwaitdone()

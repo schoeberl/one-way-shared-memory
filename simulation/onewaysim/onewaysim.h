@@ -58,7 +58,7 @@
 //   starts). 
 #define FOURNODES "nel|"\
                   "  nl|"\
-		          "   el|"
+                  "   el|"
 #define FOURNODES_N 4
 
 // do edit this to set up the NoC grid and buffer
@@ -115,18 +115,40 @@ typedef struct Core
 extern Core core[CORES];
 
 // a struct for the handshake push message
+#define HANDSHAKEMSGSIZE 8
 typedef struct handshakemsg_t
 {
+  // first word captures some noc router information for possible extra checks on the receiver side
+  // coreid*0x10000000 + tdmslot*0x1000000 + word*0x10000 + txcnt;
+  unsigned int txstamp;
+  // sender core id
+  unsigned int fromcore;
+  // receiver core id
+  unsigned int tocore;
+  // number of data words
+  unsigned int length; 
+  // data words (an array can also be used if a more complex/dynamic scheme is wanted)
   unsigned int data0;
   unsigned int data1;
   unsigned int data2;
-  unsigned int pushid; // 0 means no message
+  unsigned int data3;
+  // block number: starts at 1 and is acknowledged in the handshake confirmation msg
+  unsigned int blockno; 
 } handshakemsg_t;
 
 // a struct for handshaking acknowledgement
+#define HANDSHAKEACKSIZE 4
 typedef struct handshakeack_t
 {
-  unsigned long ackid;
+  // first word captures some noc router information for possible extra checks on the receiver side
+  // coreid*0x10000000 + tdmslot*0x1000000 + word*0x10000 + msgid;
+  unsigned int txstamp;
+  // the receiver core that is acknowleding 
+  unsigned int fromcore;
+  // the original sender core waiting for the acknowledgement
+  unsigned int tocore;
+  // block number: from the just received handshakemsg 
+  unsigned int blockno; 
 } handshakeack_t;
 
 // a struct for state exchange
@@ -159,7 +181,7 @@ void simcontrol();
 #endif
 
 void corethreadtbswork(void *noarg);
-void corethreadhspwork(void *noarg);
+void corethreadhswork(void *noarg);
 void corethreadeswork(void *noarg);
 void corethreadsdbwork(void *noarg);
 

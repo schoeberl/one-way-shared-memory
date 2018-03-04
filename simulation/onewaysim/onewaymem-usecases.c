@@ -202,57 +202,210 @@ void triggerhandshakework(int cid)
   sync_printf(cid, "handshaketriggger in core %d...\n", cid);
 }
 
-void corethreadhsp(void *coreid)
+void corethreadhswork(void *noarg)
 {
-  int cid = *((int *)coreid);
+  int cid = get_cpuid();
   int step = 0;
-  unsigned long tdmround = 0xFFFFFFFF;
-  unsigned long hyperperiod = 0xFFFFFFFF;
-  handshakemsg_t pushmsg;
-  memset(&pushmsg, 0, sizeof(pushmsg));
-  handshakeack_t ackmsg;
-  memset(&ackmsg, 0, sizeof(ackmsg));
+  int txcnt = 1;
+  unsigned int hyperperiod = 0xFFFFFFFF;
+
+  // set up the use case so all cores will send a handshake message to the other cores
+  // and receive the appropriate acknowledgement
+  handshakemsg_t hmsg_out[TDMSLOTS];
+  handshakemsg_t hmsg_in[TDMSLOTS];
+  handshakeack_t hmsg_ack_out[TDMSLOTS];
+  handshakeack_t hmsg_ack_in[TDMSLOTS];
 
   sync_printf(cid, "in corethreadhsp(%d)...\n", cid);
+  
+  //unsigned int tdmround[TDMSLOTS];
+  // previous hyperperiod (used to detect/poll for new hyperperiod)
+  unsigned int prevhyperperiod[TDMSLOTS];
+  volatile _SPM int* hyperperiodptr[TDMSLOTS];
+  
+  for(int i = 0; i < TDMSLOTS; i++)
+    hyperperiodptr[i] = &core[get_cpuid()].rx[i][0];
 
-  //  push a message to another core
-  //    (and wait for ack)
-  //  doing this for core 1 to core 2 to keep it transparent
-  int pushcoreid = 1;
-  int ackcoreid = 2;
-  // rx slot from txcoreid, rxcoreid, and txslot
-  int ackcoreidindexmap = 0;//getrxslot(pushcoreid, cid, 0);
-  int lastpushid = cid + 10;
-  pushmsg.pushid = lastpushid; // so we are expecting a ack id of 10 + our core id
+  int state = 0;
+  const int donestate = 100;
+  while (runcores) {
+    // NOC CONTROL SECTION //
+    // overall "noc state" handled by poor core 0 as a sidejob 
+    static int roundstate = 0;
+    // max state before core 0 stops the mission
+    const int MAXROUNDSTATE = 4;
+    if (cid == 0){
+      if(roundstate == MAXROUNDSTATE) {
+        // signal to stop the slave cores
+        runcores = false; 
+        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+      }  
+      roundstate++;
+    }
+     
+    // CORE WORK SECTION //  
+    // individual core states incl 0
+    switch (state) {
+      // tx messages
+      case 0: {
+        // state work
+        sync_printf(cid, "core %d tx state 0\n", cid);
+        
+        // prepare the handshaked messages
+        for(int i=0; i < TDMSLOTS; i++){ 
+          // txstamp in first word
+          hmsg_out[i].txstamp =  cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt;
+          hmsg_out[i].fromcore = cid;          
+          hmsg_out[i].tocore   = gettxcorefromrxcoreslot(cid, i);
+          // fixed words and 4 data words
+          hmsg_out[i].length   = HANDSHAKEMSGSIZE; 
+          // some test data
+          hmsg_out[i].data0    = getcycles();
+          hmsg_out[i].data1    = getcycles();
+          hmsg_out[i].data2    = getcycles();
+          hmsg_out[i].data3    = getcycles();          
+          // block identifier
+          hmsg_out[i].blockno  = txcnt;
+        } 
+        
+        // tx the messages
+        for(int i=0; i<TDMSLOTS; i++) { 
+          core[cid].tx[i][0] = hmsg_out[i].txstamp;
+          core[cid].tx[i][1] = hmsg_out[i].fromcore;          
+          core[cid].tx[i][2] = hmsg_out[i].tocore;
+          // fixed words ad 4 data words
+          core[cid].tx[i][3] = hmsg_out[i].length; 
+          // some test data
+          core[cid].tx[i][4] = hmsg_out[i].data0;
+          core[cid].tx[i][5] = hmsg_out[i].data1;
+          core[cid].tx[i][6] = hmsg_out[i].data2;
+          // block identifier
+          core[cid].tx[i][7] = hmsg_out[i].blockno;
+        }
+        
+        txcnt++;  
+        spinwork(TDMSLOTS*WORDS);
+        
+        // next state
+        if (true) {
+          state++;
+        }
+        break;
+      }
+      // rx messages, check them and ack them 
+      case 1: {
+        // state work
+        sync_printf(cid, "core %d msg rx state 1\n", cid);        
+        
+        for(int i=0; i<TDMSLOTS; i++) { 
+          hmsg_in[i].txstamp =  core[cid].rx[i][0];
+          hmsg_in[i].fromcore = core[cid].rx[i][1];          
+          hmsg_in[i].tocore =   core[cid].rx[i][2];
+          // fixed words a3d 4 data words
+          hmsg_in[i].length =   core[cid].rx[i][3]; 
+          // some test data
+          hmsg_in[i].data0 =    core[cid].rx[i][4];
+          hmsg_in[i].data1 =    core[cid].rx[i][5];
+          hmsg_in[i].data2 =    core[cid].rx[i][6];
+          // block identifier
+          hmsg_in[i].blockno =  core[cid].rx[i][7];
+          sync_printf(cid, "hmsg_in[%d](%d) 0x%08x 0x%08x 0x%08x 0x%08x\n",
+            i, getrxcorefromtxcoreslot(cid,i),
+            core[cid].rx[i][0], core[cid].rx[i][1], core[cid].rx[i][2], core[cid].rx[i][3]);
+          sync_printf(cid, "              0x%08x 0x%08x 0x%08x 0x%08x\n",
+            core[cid].rx[i][4], core[cid].rx[i][5], core[cid].rx[i][6], core[cid].rx[i][7]);
+        }
+        recordhyperperiodwork(&prevhyperperiod[0]);
+        spinwork(TDMSLOTS*WORDS);
+        
+       
+        
+        txcnt++;    
 
-  printf("\n");
-  // only copy to the tx buffer if this is the pushcoreid
-  if (cid == pushcoreid)
-  {
-    //memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
-  }
-  //memtxprint(cid);
+        // next state    
+        if (true) { 
+          state++;
+        }
+        break;
+      }
+        
+      case 2: {
+        // state work
+        sync_printf(cid, "core %d ack tx state 2\n", cid);        
+        spinwork(TDMSLOTS*WORDS);
+        // prepare the acks (if the msg was ok)
+        for(int i=0; i < TDMSLOTS; i++){ 
+          bool msgok = (hmsg_in[i].tocore == cid) && (hmsg_in[i].length == HANDSHAKEMSGSIZE);
+          if (msgok) {
+            // txstamp in first word
+            hmsg_ack_out[i].txstamp  = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt;
+            hmsg_ack_out[i].fromcore = cid;          
+            hmsg_ack_out[i].tocore   = getrxcorefromtxcoreslot(cid, i);
+            // block identifier (acknowledged)
+            hmsg_ack_out[i].blockno  = hmsg_in[i].blockno;
+          }
+          
+          if(msgok){
+            core[cid].tx[i][0] = hmsg_ack_out[i].txstamp;
+            core[cid].tx[i][1] = hmsg_ack_out[i].fromcore;          
+            core[cid].tx[i][2] = hmsg_ack_out[i].tocore;
+            core[cid].tx[i][3] = hmsg_ack_out[i].blockno;
+          }
+          
+          if(msgok){
+            sync_printf(cid, "hmsg_ack[%d] ack (blockno %d) sent to core %d\n",
+                        i, hmsg_ack_out[i].blockno, hmsg_ack_out[i].tocore);
+          }
+        }       
+        recordhyperperiodwork(&prevhyperperiod[0]);
+        spinwork(TDMSLOTS*WORDS);
+        //next state
+        if (true) {
+          state++;
+        }
+        break;
+      }
+      
+      case 3: {
+        // state work
+        sync_printf(cid, "core %d ack rx state 3\n", cid);    
+        for(int i=0; i<TDMSLOTS; i++) { 
+          hmsg_ack_in[i].txstamp =  core[cid].rx[i][0];
+          hmsg_ack_in[i].fromcore = core[cid].rx[i][1];          
+          hmsg_ack_in[i].tocore =   core[cid].rx[i][2];
+          // block identifier that is acknowledged
+          hmsg_ack_in[i].blockno =  core[cid].rx[i][3];
+          sync_printf(cid, "hmsg_ack_in[%d](%d) 0x%08x 0x%08x 0x%08x 0x%08x\n",
+            i, getrxcorefromtxcoreslot(cid,i),
+            hmsg_ack_in[i].txstamp, hmsg_ack_in[i].fromcore, 
+            hmsg_ack_in[i].tocore, hmsg_ack_in[i].blockno);
+        }
+        
+        // check use 2
+        for(int i=0; i<TDMSLOTS; i++) { 
+          int ackok = (hmsg_out[i].blockno == hmsg_ack_in[i].blockno) && 
+                      (hmsg_ack_in[i].fromcore == gettxcorefromrxcoreslot(cid, i)) &&
+                      (hmsg_ack_in[i].tocore == cid);
+          if(ackok)
+            sync_printf(cid, "use case 2 ok (ack from tx core %d ok)!\n", hmsg_ack_in[i].fromcore);
+          else
+            sync_printf(cid, "Error: use case 2 not ok (from %d)!\n", hmsg_ack_in[i].fromcore);
+            
+        }
+        spinwork(TDMSLOTS*WORDS);
 
-  int lastackid = 0; // 0 means no message
-
-  while (runcores)
-  {
-    int monitorlastword = core[cid].rx[ackcoreidindexmap][0];
-    if (monitorlastword != lastackid)
-    {
-      // new message id
-      //   copy rx buffer
-      //memcpy(&ackmsg, core[cid].rxmem[0], sizeof(ackmsg));
-      // ack it (if we are the test core set up to do so)
-      ackmsg.ackid = monitorlastword;
-      lastackid = monitorlastword;
-      // tx if we are the core set up to do so
-      if (cid == ackcoreid)
-      {
-        //memcpy(core[cid].txmem[0], &pushmsg, sizeof(pushmsg));
+        // next state    
+        if (true) { 
+          state++;
+        }
+        break;  
+      }      
+      default: {
+          // no work, just "looping" until runcores == false is signaled from core 0
+          break;
       }
     }
-    //sync_printf(cid, "Core %ld: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  ackmsg.reqid=%lu,\n  ackmsg.respid=%lu,\n  ackmsg.data1=%lu,\n  ackmsg.data2=%lu\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, ackmsg.reqid, ackmsg.respid, ackmsg.data1, ackmsg.data2);
+  
   }
 }
 
@@ -266,9 +419,10 @@ void triggerexchangeofstatework(int cid)
   sync_printf(cid, "Core %d change of state...\n", cid);
 }
 
-void corethreadeswork(void *coreid)
-{
-  int cid = *((int *)coreid);
+void corethreadeswork(void *noarg) {
+  int state = 0;
+  int cid = get_cpuid();
+  
   int step = 0;
   es_msg_t esmsg;
   memset(&esmsg, 0, sizeof(esmsg));
@@ -291,6 +445,8 @@ void corethreadeswork(void *coreid)
     }
     step++;
   }
+  
+  
 }
 
 ///////////////////////////////////////////////////////////////////////////////
