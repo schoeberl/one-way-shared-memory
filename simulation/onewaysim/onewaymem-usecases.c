@@ -263,7 +263,6 @@ void corethreadhswork(void *noarg)
           hmsg_out[i].data0    = getcycles();
           hmsg_out[i].data1    = getcycles();
           hmsg_out[i].data2    = getcycles();
-          hmsg_out[i].data3    = getcycles();          
           // block identifier
           hmsg_out[i].blockno  = txcnt;
         } 
@@ -413,38 +412,112 @@ void corethreadhswork(void *noarg)
 //COMMUNICATION PATTERN: Exchange of state
 ///////////////////////////////////////////////////////////////////////////////
 
-// called when there is change of state
-void triggerexchangeofstatework(int cid)
-{
-  sync_printf(cid, "Core %d change of state...\n", cid);
-}
-
 void corethreadeswork(void *noarg) {
-  int state = 0;
   int cid = get_cpuid();
   
-  int step = 0;
-  es_msg_t esmsg;
-  memset(&esmsg, 0, sizeof(esmsg));
-
-  int delay = 1000000;
-  while (runcores)
-  {
-    if (step % delay == 0)
-    {
-      //sync_printf(cid, "Core %ld sensor request: TDMROUND_REGISTER   =%lu, HYPERPERIOD_REGISTER(*)=%lu,\n  ackmsg.ackid=%lu,\n  ackmsg.ackid=%lu,\n", cid, TDMROUND_REGISTER, HYPERPERIOD_REGISTER, ackmsg.ackid, ackmsg.ackid);
-      esmsg.sensorid = 10 + cid;     // to be able to recognize it easily on the tx side
-      esmsg.sensorval = getcycles(); // the artificial "temperature" proxy
-      memcpy(core[cid].tx, &esmsg, sizeof(esmsg));
+  int txcnt = 1;
+  const int SENSORID0 = 0x112233;
+  es_msg_t esmsg_out;
+  es_msg_t esmsg_in[TDMSLOTS];
+  
+  int state = 0;
+  while (runcores) {
+    // NOC CONTROL SECTION //
+    // overall "noc state" handled by poor core 0 as a sidejob 
+    static int roundstate = 0;
+    // max state before core 0 stops the mission
+    const int MAXROUNDSTATE = 4;
+    if (cid == 0){
+      if(roundstate == MAXROUNDSTATE) {
+        // signal to stop the slave cores
+        runcores = false; 
+        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+      }  
+      roundstate++;
     }
+       
+    // CORE WORK SECTION //  
+    // individual core states incl 0
+    switch (state) {
+      // tx messages
+      case 0: {
+        // state work
+        if(cid == 0)
+          sync_printf(cid, "core %d to tx sensor state exchange\n", cid);
+        else
+          sync_printf(cid, "core %d no work in state 0\n", cid);
+        
+        // Prepare the sensor reading that is transmitted from core 0 to all the other cores
+        if (cid == 0) {
+          esmsg_out.txstamp   = -1;
+          esmsg_out.sensorid  = SENSORID0;
+          esmsg_out.sensorval = getcycles(); // the artificial "temperature" proxy
+        }
+         
+        if (cid == 0) { 
+          // tx the message
+          for(int i=0; i<TDMSLOTS; i++) { 
+            core[cid].tx[i][0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt;
+            core[cid].tx[i][1] = esmsg_out.sensorid;          
+            core[cid].tx[i][2] = esmsg_out.sensorval;
+          }
+          txcnt++;  
+        }
+                
+        spinwork(TDMSLOTS*WORDS);
+        
+        // next state
+        if (true) {
+          state++;
+        }
+        break;
+      }
+      // rx sensor  
+      case 1: {
+        // state work
+        // now slave cores receive the message
+        if(cid != 0){
+          sync_printf(cid, "core %d es msg rx in state 1\n", cid);
+          int core0slot = -1;
+          for(int i=0; i<TDMSLOTS; i++) 
+            if (gettxcorefromrxcoreslot(cid, i) == 0)
+              core0slot = i;
+          
+          esmsg_in[cid].txstamp   = core[cid].rx[core0slot][0];
+          esmsg_in[cid].sensorid  = core[cid].rx[core0slot][1];          
+          esmsg_in[cid].sensorval = core[cid].rx[core0slot][2];
+          
+          sync_printf(cid, "esmsg_in[%d](%d) 0x%08x 0x%08x 0x%08x\n",
+              core0slot, 0, esmsg_in[cid].txstamp, esmsg_in[cid].sensorid, esmsg_in[cid].sensorval);
+        } else {
+          sync_printf(cid, "core %d no work in this state\n", cid);
+        }
+        
+        if(cid != 0){
+          // check use case 3
+          if (esmsg_in[cid].sensorid == SENSORID0)
+            sync_printf(cid, "use case 3 ok (core 0 sensor state to core %d)!\n", cid);
+          else
+            sync_printf(cid, "use case 3 not ok (core 0 sensor state to core %d)!\n", cid);  
+        }        
+          
+        spinwork(TDMSLOTS*WORDS);
 
-    // sensor read
-    if (core[cid].tx[0][0] > 0)
-    {
-      //sync_printf(cid, "Core %ld sensor reply: TDMCYCLE_REGISTER   =%lu, TDMROUND_REGISTER(*)=%lu,\n  ackmsg.reqid=%lu,\n  ackmsg.respid=%lu,\n  ackmsg.sensorid=%lu,\n  ackmsg.sensorval=%lu\n", cid, TDMROUND_REGISTER, TDMROUND_REGISTER, ackmsg.reqid, ackmsg.respid, ackmsg.data1, ackmsg.data2);
+        // next state    
+        if (true) { 
+          state++;
+        }
+        break;
+      }
+    
+      default: {
+          // no work, just "looping" until runcores == false is signaled from core 0
+          break;
+      }
     }
-    step++;
+  
   }
+  
   
   
 }

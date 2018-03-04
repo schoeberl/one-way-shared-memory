@@ -131,7 +131,6 @@ typedef struct handshakemsg_t
   unsigned int data0;
   unsigned int data1;
   unsigned int data2;
-  unsigned int data3;
   // block number: starts at 1 and is acknowledged in the handshake confirmation msg
   unsigned int blockno; 
 } handshakemsg_t;
@@ -154,10 +153,15 @@ typedef struct handshakeack_t
 // a struct for state exchange
 typedef struct es_msg_t
 {
+  // first word captures some noc router information for possible extra checks on the receiver side
+  // coreid*0x10000000 + tdmslot*0x1000000 + word*0x10000 + msgid;
+  unsigned int txstamp;
+  // timestamp
+  unsigned int timestamp;
   // sensor id
-  unsigned long sensorid;
+  unsigned int sensorid;
   //sensor value
-  unsigned long sensorval;
+  unsigned int sensorval;
 } es_msg_t;
 
 // a struct for one buffer

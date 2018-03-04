@@ -106,9 +106,9 @@ void nocstart(){
   // use case 1, time-based sync: corethreadtbswork
   //void (*corefuncptr)(void *) = &corethreadtbswork;
   // use case 2, handshake:       corethreadhswork
-  void (*corefuncptr)(void *) = &corethreadhswork;
+  //void (*corefuncptr)(void *) = &corethreadhswork;
   // use case 3, state exchange:  corethreadeswork
-  //void (*corefuncptr)(void *) = &corethreadeswork;
+  void (*corefuncptr)(void *) = &corethreadeswork;
   // use case 4: corethreadsdbwork
   //void (*corefuncptr)(void *) = &corethreaddbwork;
 
