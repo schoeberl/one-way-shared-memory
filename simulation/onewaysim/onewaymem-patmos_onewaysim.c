@@ -97,20 +97,11 @@ void nocinit()
 }
 
 // start the slave cores
-void nocstart(){
+void nocstart(void (*corefuncptr)(void *)){
   // START STEPS 0, 1, and 2
   
   //0. start the other cores
   runcores = true;
-
-  // use case 1, time-based sync: corethreadtbswork
-  //void (*corefuncptr)(void *) = &corethreadtbswork;
-  // use case 2, handshake:       corethreadhswork
-  //void (*corefuncptr)(void *) = &corethreadhswork;
-  // use case 3, state exchange:  corethreadeswork
-  void (*corefuncptr)(void *) = &corethreadeswork;
-  // use case 4: corethreadsdbwork
-  //void (*corefuncptr)(void *) = &corethreaddbwork;
 
   // 1. start the slave cores 1..CORES-1
   for (int c = 1; c < CORES; c++)
@@ -147,8 +138,25 @@ int main(int argc, char *argv[])
   printf("Init...\n");
   nocinit();
   printf("Start...\n");
-  nocstart();
+  
+  // Howto: Enable one of the following use cases //
+  
+  // use case 1, time-based sync: corethreadtbswork
+  //void (*corefuncptr)(void *) = &corethreadtbswork;
+
+  // use case 2, handshake:       corethreadhswork
+  //void (*corefuncptr)(void *) = &corethreadhswork;
+
+  // use case 3, state exchange:  corethreadeswork
+  //void (*corefuncptr)(void *) = &corethreadeswork;
+
+  // use case 4: corethreadsdbwork
+  void (*corefuncptr)(void *) = &corethreadsdbwork;  
+  
+  nocstart(corefuncptr);
+  
   printf("Wait...\n");
+  
   // core 0 is done, wait for the others
   nocwaitdone();
   printf("Done...\n");
@@ -158,8 +166,6 @@ int main(int argc, char *argv[])
     sync_print_core(i);
   }
   
-  //sync_printall();
-   
   printf("****************************************\n");
   printf("****************************************\n");
   

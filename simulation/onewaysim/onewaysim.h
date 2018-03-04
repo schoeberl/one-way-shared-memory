@@ -167,7 +167,8 @@ typedef struct es_msg_t
 // a struct for one buffer
 typedef struct buffer_t
 {
-  unsigned long data[MEMBUF * CORES];
+  unsigned int txstamp;
+  unsigned int data[WORDS - 1];
 } buffer_t;
 
 // init patmos (simulated) internals

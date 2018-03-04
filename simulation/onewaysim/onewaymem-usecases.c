@@ -526,36 +526,102 @@ void corethreadeswork(void *noarg) {
 //COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
 ///////////////////////////////////////////////////////////////////////////////
 
-//called when there is a new buffer
-void triggeronbufferwork(int cid)
-{
-  sync_printf(cid, "Core %d new buffer...\n", cid);
-}
-
 void corethreadsdbwork(void *noarg)
 {
-  int cid = *((int *)coreid);
+  int cid = get_cpuid();
   sync_printf(cid, "Core %d started...\n", cid);
-  int step = 0;
-  buffer_t buffer_in;
-  memset(&buffer_in, 0, sizeof(buffer_in));
+ 
+  buffer_t buf_out[TDMSLOTS];
+  buffer_t buf_in[TDMSLOTS];
 
-  int lastword = 0;
-  while (runcores)
-  {
-    int monitorlastword = core[cid].rx[0][0];
-    if (monitorlastword != lastword)
-    {
-      memcpy(&buffer_in, core[cid].rx, sizeof(buffer_t));
-      triggeronbufferwork(cid);
+
+  int txcnt = 1;
+  int state = 0;
+  while (runcores) {
+    // NOC CONTROL SECTION //
+    // overall "noc state" handled by poor core 0 as a sidejob 
+    static int roundstate = 0;
+    // max state before core 0 stops the mission
+    const int MAXROUNDSTATE = 2;
+    if (cid == 0){
+      if(roundstate == MAXROUNDSTATE) {
+        // signal to stop the slave cores
+        runcores = false; 
+        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+      }  
+      roundstate++;
     }
-    // tx new data for other buffers at another core
-    // step data used here
-    core[cid].tx[0][0] = 10000 + step * 100 + cid;
-    core[cid].tx[1][0] = 10000 + step * 100 + cid;
-    core[cid].tx[2][0] = 10000 + step * 100 + cid;
-    core[cid].tx[3][0] = 10000 + step * 100 + cid;
-    step++;
+       
+    // CORE WORK SECTION //  
+    // individual core states incl 0
+    switch (state) {
+      // all tx their buffers
+      case 0: {
+        sync_printf(cid, "core %d to tx it's buffer in state 0\n", cid);
+        for(int i=0; i<TDMSLOTS; i++) {
+          buf_out[i].txstamp = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=0; j < WORDS - 1; j++){
+            buf_out[i].data[j] = cid + j;
+          }
+        }
+
+        for(int i=0; i<TDMSLOTS; i++) {
+          core[cid].tx[i][0] = buf_out[i].txstamp;
+          for(int j=0; j < WORDS - 1; j++){
+            core[cid].tx[i][j+1] = buf_out[i].data[j];          
+          }
+        }
+        txcnt++;  
+                
+        spinwork(TDMSLOTS*WORDS);
+        
+        // next state
+        if (true) {
+          state++;
+        }
+        break;
+      }
+      // rx buffer core 0  
+      case 1: {
+        // state work
+        spinwork(TDMSLOTS*WORDS);
+        
+        if(cid == 0){
+          sync_printf(cid, "core 0 in buffer rx state 1\n", cid);
+          for(int i=0; i<TDMSLOTS; i++) {
+            buf_in[i].txstamp = core[cid].rx[i][0];
+            for(int j=0; j < WORDS - 1; j++) {
+              buf_in[i].data[j] = core[cid].rx[i][j+1];          
+            }
+            sync_printf(cid, "buf_in[%d](%d) 0x%08x : .data[0]=0x%08x ... .data[%d]=0x%08x\n",
+              i, gettxcorefromrxcoreslot(cid, i), buf_in[i].txstamp, 
+              buf_in[i].data[0], WORDS-2, buf_in[i].data[WORDS-2]);
+          }
+          
+          if((buf_in[0].data[WORDS-2]-buf_in[0].data[0]) == WORDS - 2)
+            sync_printf(cid, "use case 4 ok!\n", cid);
+          else
+            sync_printf(cid, "use case 4 not ok!\n", cid);
+            
+        } else {
+          sync_printf(cid, "core %d have no rx work in state 1\n", cid);
+        }
+          
+        spinwork(TDMSLOTS*WORDS);
+
+        // next state    
+        if (true) { 
+          state++;
+        }
+        break;
+      }
+    
+      default: {
+          // no work, just "looping" until runcores == false is signaled from core 0
+          break;
+      }
+    }
+  
   }
 }
 
