@@ -151,10 +151,10 @@ int main(int argc, char *argv[])
   //void (*corefuncptr)(void *) = &corethreadhswork;
 
   // use case 3, state exchange:  corethreadeswork
-  void (*corefuncptr)(void *) = &corethreadeswork;
+  //void (*corefuncptr)(void *) = &corethreadeswork;
 
   // use case 4: corethreadsdbwork
-  //void (*corefuncptr)(void *) = &corethreadsdbwork;  
+  void (*corefuncptr)(void *) = &corethreadsdbwork;  
   
   nocstart(corefuncptr);
   

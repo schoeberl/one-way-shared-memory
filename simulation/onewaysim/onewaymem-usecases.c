@@ -644,6 +644,24 @@ void corethreadsdbwork(void *noarg)
       // all tx their buffers
       case 0: {
         sync_printf(cid, "core %d to tx it's buffer in state 0\n", cid);
+        
+        // first round of tx
+        for(int i=0; i<TDMSLOTS; i++) {
+          buf_out[i].txstamp = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=0; j < WORDS - 1; j++){
+            buf_out[i].data[j] = cid + j;
+          }
+        }
+
+        for(int i=0; i<TDMSLOTS; i++) {
+          core[cid].tx[i][0] = buf_out[i].txstamp;
+          for(int j=0; j < WORDS - 1; j++){
+            core[cid].tx[i][j+1] = buf_out[i].data[j];          
+          }
+        }
+        txcnt++;  
+        
+        // second round of tx
         for(int i=0; i<TDMSLOTS; i++) {
           buf_out[i].txstamp = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
           for(int j=0; j < WORDS - 1; j++){
@@ -659,7 +677,7 @@ void corethreadsdbwork(void *noarg)
         }
         txcnt++;  
                 
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
         
         // next state
         if (true) {
@@ -670,7 +688,7 @@ void corethreadsdbwork(void *noarg)
       // rx buffer core 0  
       case 1: {
         // state work
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
         
         if(cid == 0){
           sync_printf(cid, "core 0 in buffer rx state 1\n", cid);
