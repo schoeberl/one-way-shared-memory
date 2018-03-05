@@ -492,12 +492,14 @@ void corethreadhswork(void *noarg)
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Exchange of state
 ///////////////////////////////////////////////////////////////////////////////
-
+const unsigned int CPUFREQ = 80e6;
 void corethreadeswork(void *noarg) {
   int cid = get_cpuid();
   
   int txcnt = 1;
   const int SENSORID0 = 0x112233;
+  const unsigned int SENSORUPDATEHZ = 1;
+
   es_msg_t esmsg_out;
   es_msg_t esmsg_in[TDMSLOTS];
   
@@ -507,7 +509,7 @@ void corethreadeswork(void *noarg) {
     // overall "noc state" handled by poor core 0 as a sidejob 
     static int roundstate = 0;
     // max state before core 0 stops the mission
-    const int MAXROUNDSTATE = 4;
+    const int MAXROUNDSTATE = 3;
     if (cid == 0){
       if(roundstate == MAXROUNDSTATE) {
         // signal to stop the slave cores
@@ -527,6 +529,9 @@ void corethreadeswork(void *noarg) {
           sync_printf(cid, "core %d to tx sensor state exchange\n", cid);
         else
           sync_printf(cid, "core %d no work in state 0\n", cid);
+        
+        unsigned int sensestart = getcycles();
+        while(getcycles()-sensestart < CPUFREQ/SENSORUPDATEHZ);
         
         // Prepare the sensor reading that is transmitted from core 0 to all the other cores
         if (cid == 0) {
