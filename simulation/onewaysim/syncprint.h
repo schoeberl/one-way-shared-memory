@@ -1,6 +1,7 @@
 #ifndef SYNCPRINT_H
 #define SYNCPRINT_H
 #include <math.h>
+#include <locale.h>
 
 #ifdef __patmos__
 #include "libcorethread/corethread.h"

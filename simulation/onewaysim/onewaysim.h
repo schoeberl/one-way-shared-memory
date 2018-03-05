@@ -81,6 +81,7 @@
 // patmos hardware registers provided via Scala HDL
 #ifdef RUNONPATMOS
 volatile _UNCACHED bool runcores;
+volatile _UNCACHED bool coreready[CORES];
 typedef volatile _UNCACHED unsigned long PATMOS_REGISTER;
 #else
 volatile bool runcores;

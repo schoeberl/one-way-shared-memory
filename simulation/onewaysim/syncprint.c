@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+
 #include <math.h>
 
 #ifndef RUNONPATMOS
@@ -91,7 +92,7 @@ void sync_printall()
         }
       }
     }
-    printf("[cycle=%lu, core=%d, msg#=%2d] %s", 
+    printf("[cycle=%'lu, core=%d, msg#=%2d] %s", 
            timestamps[closestcoreid][minmark[closestcoreid]], closestcoreid,
            minmark[closestcoreid], strings[closestcoreid][minmark[closestcoreid]]);
     
@@ -116,6 +117,7 @@ void sync_printall()
 // infocore is id = PRINTCORES (same as CORES + 1)
 void sync_print_core(int id)
 {
+  setlocale(LC_ALL,"");
   bool print = true;
   int closestcoreid = 0;
   int closestmsgid = 0;
@@ -139,8 +141,8 @@ void sync_print_core(int id)
       }
     }
     if (closestcoreid == id){
-      printf("[cy%lu id%02d #%02d] %s", 
-             timestamps[closestcoreid][minmark[closestcoreid]], 
+      printf("[cy%'d id%02d #%02d] %s", 
+             (int)timestamps[closestcoreid][minmark[closestcoreid]], 
              closestcoreid, minmark[closestcoreid], 
              strings[closestcoreid][minmark[closestcoreid]]);
     }

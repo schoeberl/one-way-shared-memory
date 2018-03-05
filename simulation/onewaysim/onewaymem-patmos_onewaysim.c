@@ -102,6 +102,8 @@ void nocstart(void (*corefuncptr)(void *)){
   
   //0. start the other cores
   runcores = true;
+  for(int i = 0; i < CORES; i++) 
+    coreready[i] = false;
 
   // 1. start the slave cores 1..CORES-1
   for (int c = 1; c < CORES; c++)
@@ -132,6 +134,7 @@ void nocwaitdone()
 // we are core 0
 int main(int argc, char *argv[])
 {
+  setlocale(LC_ALL,"");
   printf("****************************************\n");
   printf("****onewaymem: run usecase on patmos****\n");
   printf("****************************************\n");
@@ -142,7 +145,7 @@ int main(int argc, char *argv[])
   // Howto: Enable one of the following use cases //
   
   // use case 1, time-based sync: corethreadtbswork
-  //void (*corefuncptr)(void *) = &corethreadtbswork;
+  void (*corefuncptr)(void *) = &corethreadtbswork;
 
   // use case 2, handshake:       corethreadhswork
   //void (*corefuncptr)(void *) = &corethreadhswork;
@@ -151,7 +154,7 @@ int main(int argc, char *argv[])
   //void (*corefuncptr)(void *) = &corethreadeswork;
 
   // use case 4: corethreadsdbwork
-  void (*corefuncptr)(void *) = &corethreadsdbwork;  
+  //void (*corefuncptr)(void *) = &corethreadsdbwork;  
   
   nocstart(corefuncptr);
   

@@ -38,6 +38,18 @@ void spinwork(unsigned int waitcycles){
   while((getcycles()-start) <= waitcycles);
 }
 
+// called by each core thread before starting the state machine
+void holdandgowork(){
+  coreready[get_cpuid()] = true;
+  bool allcoresready = false;
+  while(!allcoresready){
+    allcoresready = true;
+    for(int i = 0; i < CORES; i++) 
+      if (coreready[i] == false)
+        allcoresready = false;
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
@@ -109,7 +121,10 @@ void corethreadtbswork(void *noarg) {
   
   for(int i = 0; i < TDMSLOTS; i++)
     hyperperiodptr[i] = &core[get_cpuid()].rx[i][0];
-
+  
+  holdandgowork();
+  sync_printf(cid, "core %d mission start on cycle %d\n", cid, getcycles());
+  
   while (runcores) {
     // overall "noc state" handled by poor core 0 as a sidejob 
     static int roundstate = 0;
