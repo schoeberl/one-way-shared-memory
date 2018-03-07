@@ -5,10 +5,7 @@
  * 
  */
 
-package oneway
-
-import Const._
-import scala.util.Random
+package s4noc
 
 object ScheduleTester {
 

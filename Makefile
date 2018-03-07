@@ -7,20 +7,20 @@ help:
 	#
 
 test:
-	sbt "test:runMain oneway.ScheduleTester"
-	sbt "test:runMain oneway.RouterTester"
-	sbt "test:runMain oneway.NetworkTester"
-	sbt "test:runMain oneway.NetworkCompare"
+	sbt "test:runMain s4noc.ScheduleTester"
+	sbt "test:runMain s4noc.RouterTester"
+	sbt "test:runMain s4noc.NetworkTester"
+	sbt "test:runMain s4noc.NetworkCompare"
 	sbt "test:runMain oneway.OneWayMemTester"
 
 testone:
 	sbt "test:runMain oneway.OneWayMemTester"
 
 network:
-	sbt "test:runMain oneway.NetworkTester"
+	sbt "test:runMain s4noc.NetworkTester"
 
 router:
-	sbt "runMain oneway.Router"
+	sbt "runMain s4noc.Router"
 
 hardware:
 	sbt "runMain oneway.OneWayMem"
@@ -44,3 +44,6 @@ T-CREST=$(HOME)/t-crest
 
 to-patmos:
 	cp src/main/scala/oneway/*.scala $(T-CREST)/patmos/hardware/src/main/scala/oneway
+	cp src/main/scala/s4noc/*.scala $(T-CREST)/patmos/hardware/src/main/scala/s4noc
+	cp src/test/scala/oneway/*.scala $(T-CREST)/patmos/hardware/src/test/scala/oneway
+	cp src/test/scala/s4noc/*.scala $(T-CREST)/patmos/hardware/src/test/scala/s4noc

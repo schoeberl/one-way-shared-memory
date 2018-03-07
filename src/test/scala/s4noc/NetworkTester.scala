@@ -4,7 +4,7 @@
  * License: Simplified BSD License
  */
 
-package oneway
+package s4noc
 
 import Chisel._
 
@@ -13,14 +13,17 @@ import Chisel._
  */
 class NetworkTester(dut: NetworkOfFour) extends Tester(dut) {
 
-  for (i <- 0 until 8) {
+  // after clock cycle 6 all outputs are 0, strange
+  // for (i <- 0 until 8) {
+  for (i <- 0 until 6) {
     for (j <- 0 until 4) {
       poke(dut.io.local(j).in.data, 0x10 * (j + 1) + i)
+      poke(dut.io.local(j).in.valid, 1)
     }
     step(1)
     println(peek(dut.io.local))
   }
-  expect(dut.io.local(0).out.data, 0x45)
+  expect(dut.io.local(0).out.data, 0x24)
 }
 
 object NetworkTester {

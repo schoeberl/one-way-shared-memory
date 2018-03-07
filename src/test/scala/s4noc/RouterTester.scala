@@ -4,7 +4,7 @@
  * License: Simplified BSD License
  */
 
-package oneway
+package s4noc
 
 import Chisel._
 
@@ -20,11 +20,16 @@ class RouterTester(c: Router) extends Tester(c) {
     poke(c.io.ports(2).in.data, 0x30 + i)
     poke(c.io.ports(3).in.data, 0x40 + i)
     poke(c.io.ports(4).in.data, 0x50 + i)
+    poke(c.io.ports(0).in.valid, 1)    
+    poke(c.io.ports(1).in.valid, 1)    
+    poke(c.io.ports(2).in.valid, 1)    
+    poke(c.io.ports(3).in.valid, 1)    
+    poke(c.io.ports(4).in.valid, 1)    
     step(1)
     println(peek(c.io.ports))
   }
   expect(c.io.ports(0).out.data, 0x14)
-  expect(c.io.ports(4).out.data, 0x44)
+  expect(c.io.ports(4).out.data, 0x34)
 
 }
 
