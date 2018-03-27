@@ -615,7 +615,7 @@ void corethreadeswork(void *noarg) {
 void corethreadsdbwork(void *noarg)
 {
   int cid = get_cpuid();
-  sync_printf(cid, "Core %d started...\n", cid);
+  sync_printf(cid, "Core %d started...TDMSLOTS=%d, WORDS=%d\n", cid, TDMSLOTS, WORDS);
  
   buffer_t buf_out[TDMSLOTS];
   buffer_t buf_in[TDMSLOTS];
@@ -647,32 +647,32 @@ void corethreadsdbwork(void *noarg)
         
         // first round of tx
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[i].txstamp = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=0; j < WORDS - 1; j++){
+          buf_out[i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=1; j < WORDS/BUFFERS; j++){
             buf_out[i].data[j] = cid + j;
           }
         }
 
         for(int i=0; i<TDMSLOTS; i++) {
-          core[cid].tx[i][0] = buf_out[i].txstamp;
-          for(int j=0; j < WORDS - 1; j++){
-            core[cid].tx[i][j+1] = buf_out[i].data[j];          
+          core[cid].tx[i][0] = buf_out[i].data[0];
+          for(int j=1; j < WORDS/BUFFERS; j++){
+            core[cid].tx[i][j] = buf_out[i].data[j];          
           }
         }
         txcnt++;  
         
         // second round of tx
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[i].txstamp = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=0; j < WORDS - 1; j++){
+          buf_out[i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=1; j < WORDS/BUFFERS; j++){
             buf_out[i].data[j] = cid + j;
           }
         }
 
         for(int i=0; i<TDMSLOTS; i++) {
-          core[cid].tx[i][0] = buf_out[i].txstamp;
-          for(int j=0; j < WORDS - 1; j++){
-            core[cid].tx[i][j+1] = buf_out[i].data[j];          
+          core[cid].tx[i][0] = buf_out[i].data[0];
+          for(int j=1; j < WORDS/BUFFERS; j++){
+            core[cid].tx[i][j] = buf_out[i].data[j];          
           }
         }
         txcnt++;  
@@ -693,13 +693,13 @@ void corethreadsdbwork(void *noarg)
         if(cid == 0){
           sync_printf(cid, "core 0 in buffer rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            buf_in[i].txstamp = core[cid].rx[i][0];
-            for(int j=0; j < WORDS - 1; j++) {
-              buf_in[i].data[j] = core[cid].rx[i][j+1];          
+            buf_in[i].data[0] = core[cid].rx[i][0];
+            for(int j=1; j < WORDS/BUFFERS; j++) {
+              buf_in[i].data[j] = core[cid].rx[i][j];          
             }
-            sync_printf(cid, "buf_in[%d](%d) 0x%08x : .data[0]=0x%08x ... .data[%d]=0x%08x\n",
-              i, gettxcorefromrxcoreslot(cid, i), buf_in[i].txstamp, 
-              buf_in[i].data[0], WORDS-2, buf_in[i].data[WORDS-2]);
+            sync_printf(cid, "buf_in[%d](%d) 0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+              i, gettxcorefromrxcoreslot(cid, i), buf_in[i].data[0], 
+              buf_in[i].data[1], WORDS/BUFFERS-2, buf_in[i].data[(WORDS/BUFFERS)-2]);
           }
           
           if((buf_in[0].data[WORDS-2]-buf_in[0].data[0]) == WORDS - 2)

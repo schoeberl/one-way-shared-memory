@@ -165,11 +165,14 @@ typedef struct es_msg_t
   unsigned int sensorval;
 } es_msg_t;
 
+// how many buffers overlaid on the tx/rx buffer (TDMSLOTS * WORDS)
+// 2, 4, 8, ...
+#define BUFFERS 2
 // a struct for one buffer
 typedef struct buffer_t
 {
-  unsigned int txstamp;
-  unsigned int data[WORDS - 1];
+  //unsigned int txstamp;
+  unsigned int data[WORDS/BUFFERS];
 } buffer_t;
 
 // init patmos (simulated) internals
