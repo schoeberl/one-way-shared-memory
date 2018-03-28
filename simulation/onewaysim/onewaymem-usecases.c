@@ -611,14 +611,17 @@ void corethreadeswork(void *noarg) {
 ///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
 ///////////////////////////////////////////////////////////////////////////////
+// there is a number of buffers overlaid on the tx and rx memory for each core
+// the size of each of these double buffers is DBUFSIZE
 
 void corethreadsdbwork(void *noarg)
 {
   int cid = get_cpuid();
-  sync_printf(cid, "Core %d started...TDMSLOTS=%d, WORDS=%d\n", cid, TDMSLOTS, WORDS);
+  sync_printf(cid, "Core %d started...DBUFSIZE=%d, TDMSLOTS=%d, WORDS=%d\n", 
+              cid, DBUFSIZE, TDMSLOTS, WORDS);
  
-  buffer_t buf_out[TDMSLOTS];
-  buffer_t buf_in[TDMSLOTS];
+  buffer_t buf_out[DBUFSIZE][TDMSLOTS];
+  buffer_t buf_in[DBUFSIZE][TDMSLOTS];
 
 
   int txcnt = 1;
@@ -647,32 +650,32 @@ void corethreadsdbwork(void *noarg)
         
         // first round of tx
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=1; j < WORDS/BUFFERS; j++){
-            buf_out[i].data[j] = cid + j;
+          buf_out[0][i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=1; j < DBUFSIZE; j++){
+            buf_out[0][i].data[j] = cid + j;
           }
         }
 
         for(int i=0; i<TDMSLOTS; i++) {
-          core[cid].tx[i][0] = buf_out[i].data[0];
-          for(int j=1; j < WORDS/BUFFERS; j++){
-            core[cid].tx[i][j] = buf_out[i].data[j];          
+          core[cid].tx[i][0] = buf_out[0][i].data[0];
+          for(int j=1; j < DBUFSIZE; j++){
+            core[cid].tx[i][j] = buf_out[0][i].data[j];          
           }
         }
         txcnt++;  
         
         // second round of tx
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=1; j < WORDS/BUFFERS; j++){
-            buf_out[i].data[j] = cid + j;
+          buf_out[0][i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=1; j < DBUFSIZE; j++){
+            buf_out[0][i].data[j] = cid + j;
           }
         }
 
         for(int i=0; i<TDMSLOTS; i++) {
-          core[cid].tx[i][0] = buf_out[i].data[0];
-          for(int j=1; j < WORDS/BUFFERS; j++){
-            core[cid].tx[i][j] = buf_out[i].data[j];          
+          core[cid].tx[i][0] = buf_out[0][i].data[0];
+          for(int j=1; j < DBUFSIZE; j++){
+            core[cid].tx[i][j] = buf_out[0][i].data[j];          
           }
         }
         txcnt++;  
@@ -693,16 +696,16 @@ void corethreadsdbwork(void *noarg)
         if(cid == 0){
           sync_printf(cid, "core 0 in buffer rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            buf_in[i].data[0] = core[cid].rx[i][0];
-            for(int j=1; j < WORDS/BUFFERS; j++) {
-              buf_in[i].data[j] = core[cid].rx[i][j];          
+            buf_in[0][i].data[0] = core[cid].rx[i][0];
+            for(int j=1; j < DBUFSIZE; j++) {
+              buf_in[0][i].data[j] = core[cid].rx[i][j];          
             }
             sync_printf(cid, "buf_in[%d](%d) 0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-              i, gettxcorefromrxcoreslot(cid, i), buf_in[i].data[0], 
-              buf_in[i].data[1], WORDS/BUFFERS-2, buf_in[i].data[(WORDS/BUFFERS)-2]);
+              i, gettxcorefromrxcoreslot(cid, i), buf_in[0][i].data[0], 
+              buf_in[0][i].data[1], DBUFSIZE-2, buf_in[0][i].data[(DBUFSIZE)-2]);
           }
           
-          if((buf_in[0].data[WORDS-2]-buf_in[0].data[0]) == WORDS - 2)
+          if((buf_in[0][0].data[DBUFSIZE-2]-buf_in[0][0].data[0]) == DBUFSIZE - 2)
             sync_printf(cid, "use case 4 ok!\n", cid);
           else
             sync_printf(cid, "use case 4 not ok!\n", cid);
