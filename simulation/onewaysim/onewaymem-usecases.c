@@ -609,7 +609,7 @@ void corethreadeswork(void *noarg) {
 //COMMUNICATION PATTERN: Streaming Double Buffer (sdb)
 ///////////////////////////////////////////////////////////////////////////////
 // there is a number of buffers overlaid on the tx and rx memory for each core
-// the size of each of these double buffers is DBUFSIZE
+// the size of each of these double buffers is DBUFSIZE 
 
 void corethreadsdbwork(void *noarg)
 {
@@ -617,21 +617,53 @@ void corethreadsdbwork(void *noarg)
   sync_printf(cid, "Core %d started...DOUBLEBUFFERS=%d, TDMSLOTS=%d, DBUFSIZE=%d, WORDS=%d\n", 
               cid, DOUBLEBUFFERS, TDMSLOTS, DBUFSIZE, WORDS);
  
-  // each tx and rx tdm slot have two (or more) double buffers
+  // setup: each tx and rx tdm slot have two (or more) double buffers
+  // each buffer_t represents one (of at least two) for each TDM slot (each 
+  //   TDM slot is WORDS long)
+  // so for a double buffer on TDM slot 0, there would be two buffer_t stuct objects
+  // they look like arrays (of arrays) as written below, but 
+  // inside each buffer_t is a pointer to an unsigned int, which is
+  // is set up to point to the part of either the rx or tx memory buffer that 
+  // a particular buffer_t "controls".
+
+  // double buffers on tx
   buffer_t buf_out[TDMSLOTS][DOUBLEBUFFERS];
+  // double buffers on rx
   buffer_t buf_in[TDMSLOTS][DOUBLEBUFFERS];
 
-  for(int i=0; i<TDMSLOTS; i++) {
+  // init the data pointer in all of the double buffers
+  // it will print something like this:
+  //   [cy592233042 id00 #01] buf_out[0][0].data address = 0xe8000000
+  //   [cy592305786 id00 #02] buf_in[0][0].data address  = 0xe8000000
+  //   as the tx and rx are memory mapped to the same address offset (ONEWAY_BASE)
+  for(int i=0; i<TDMSLOTS; i++){
     for(int j=0; j < DOUBLEBUFFERS; j++){
-      buf_out[i][j].data = &core[cid].tx[i]+(j*DBUFSIZE);          
+      buf_out[i][j].data = (volatile _IODEV int *) (core[cid].tx[i] + (j*DBUFSIZE));  
+      sync_printf(cid, "core[cid].tx[i] = %p, (j*DBUFSIZE) = %d\n",
+                       core[cid].tx[i], (j*DBUFSIZE));
+      sync_printf(cid, "buf_out[tdm=%d][dbuf=%d].data address = %p\n", 
+                  i, j, buf_out[i][j].data);     
+      for(int k=0; k < DBUFSIZE; k++){
+        buf_out[i][j].data[k] = 0;
+      }
+    }    
+  }
+
+  for(int i=0; i<TDMSLOTS; i++){
+    for(int j=0; j < DOUBLEBUFFERS; j++){
+      buf_in[i][j].data = (volatile _IODEV int *) (core[cid].rx[i] + (j*DBUFSIZE));   
+      sync_printf(cid, "buf_in[%d][%d].data address  = %p\n", 
+                  i, j, buf_in[i][j].data);   
     }
   }
+
+  holdandgowork();
+  sync_printf(cid, "core %d mission start on cycle %d\n", cid, getcycles());
 
   int txcnt = 1;
   int state = 0;
   while (runcores) {
-    // NOC CONTROL SECTION //
-    // overall "noc state" handled by poor core 0 as a sidejob 
+    // NOC CONTROL SECTION BY CORE 0//
     static int roundstate = 0;
     // max state before core 0 stops the mission
     const int MAXROUNDSTATE = 2;
@@ -651,39 +683,26 @@ void corethreadsdbwork(void *noarg)
       case 0: {
         sync_printf(cid, "core %d to tx it's buffer in state 0\n", cid);
         
-        // first round of tx
+        // first round of tx for the first buffer
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[0][i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          buf_out[i][0].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
           for(int j=1; j < DBUFSIZE; j++){
-            buf_out[0][i].data[j] = cid + j;
-          }
-        }
-
-        for(int i=0; i<TDMSLOTS; i++) {
-          core[cid].tx[i][0] = buf_out[0][i].data[0];
-          for(int j=1; j < DBUFSIZE; j++){
-            core[cid].tx[i][j] = buf_out[0][i].data[j];          
+            buf_out[i][0].data[j] = cid + j;
           }
         }
         txcnt++;  
         
-        // second round of tx
+        // second round of tx for the second buffer
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[0][i].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          buf_out[i][1].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
           for(int j=1; j < DBUFSIZE; j++){
-            buf_out[0][i].data[j] = cid + j;
-          }
-        }
-
-        for(int i=0; i<TDMSLOTS; i++) {
-          core[cid].tx[i][0] = buf_out[0][i].data[0];
-          for(int j=1; j < DBUFSIZE; j++){
-            core[cid].tx[i][j] = buf_out[0][i].data[j];          
+            buf_out[i][1].data[j] = cid + j;
           }
         }
         txcnt++;  
                 
-        //spinwork(TDMSLOTS*WORDS);
+        spinwork(TDMSLOTS*WORDS);
+        spinwork(TDMSLOTS*WORDS);
         
         // next state
         if (true) {
@@ -694,21 +713,26 @@ void corethreadsdbwork(void *noarg)
       // rx buffer core 0  
       case 1: {
         // state work
-        //spinwork(TDMSLOTS*WORDS);
+        spinwork(TDMSLOTS*WORDS);
+        sync_printf(cid, "core %d state 1 on cycle %d\n", cid, getcycles());
         
         if(cid == 0){
-          sync_printf(cid, "core 0 in buffer rx state 1\n", cid);
+          sync_printf(cid, "core 0 in double buffer 0 rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            buf_in[0][i].data[0] = core[cid].rx[i][0];
-            for(int j=1; j < DBUFSIZE; j++) {
-              buf_in[0][i].data[j] = core[cid].rx[i][j];          
-            }
-            sync_printf(cid, "buf_in[%d](%d) 0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-              i, gettxcorefromrxcoreslot(cid, i), buf_in[0][i].data[0], 
-              buf_in[0][i].data[1], DBUFSIZE-2, buf_in[0][i].data[(DBUFSIZE)-2]);
+            sync_printf(cid, "buf_in[%d](->%d)=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+                             i, gettxcorefromrxcoreslot(cid, i), buf_in[0][i].data[0], 
+                             buf_in[0][i].data[1], DBUFSIZE-1, buf_in[0][i].data[DBUFSIZE-1]);
+          }
+
+          sync_printf(cid, "core 0 in double buffer 1 rx state 1\n", cid);
+          for(int i=0; i<TDMSLOTS; i++) {
+            sync_printf(cid, "buf_in[%d](->%d)=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+                             i, gettxcorefromrxcoreslot(cid, i), buf_in[1][i].data[0], 
+                             buf_in[1][i].data[1], DBUFSIZE-1, buf_in[1][i].data[DBUFSIZE-1]);
           }
           
-          if((buf_in[0][0].data[DBUFSIZE-2]-buf_in[0][0].data[0]) == DBUFSIZE - 2)
+          // check if txcnt increase is detected
+          if(buf_in[0][1].data[0] - buf_in[0][0].data[0] == 1)
             sync_printf(cid, "use case 4 ok!\n", cid);
           else
             sync_printf(cid, "use case 4 not ok!\n", cid);

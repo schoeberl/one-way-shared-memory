@@ -166,7 +166,7 @@ typedef struct es_msg_t
   unsigned int sensorval;
 } es_msg_t;
 
-// how many ("double") buffers overlaid on each core's tx/rx buffer (of size WORDS)
+// how many ("double") buffers overlaid on each core's tx/rx buffer (of size WORDS) 
 // 2, 4, 8, ...
 #define DOUBLEBUFFERS 2
 #define DBUFSIZE WORDS/DOUBLEBUFFERS
