@@ -38,6 +38,7 @@
 //   CORES = 4, also called CNT
 //   MEMBUF = 4 (up to 256), also called WORDS
 //                                   HYPERPERIOD 
+//   Dou. buf. ex.: |DOUBLEBUFFER[0]              |DOUBLEBUFFER[1]   ...                  
 //                   MEMBUF[0] MEMBUF[1] MEMBUF[2] MEMBUF[3] ... WORDS - 1  
 //                  +---------+---------+---------+---------+---
 //                  |TX slot 0|TX slot 0|TX slot 0|TX slot 0|
@@ -105,7 +106,7 @@ typedef struct Core
   //   since txmem is [CORES-1], there is a mapping going on in txmem
   //   this mapping means that the sender core's id is skipped in the index
   //   for instance when core 0 does its second word, then the first index (txmem[0][1])
-  //     will actually mean core 1. The '[1]' in means the second word and thre is no
+  //     will actually mean core 1. The '[1]' in means the second word and there is no
   //     mapping going on there
   volatile _SPM int *tx[TDMSLOTS];
   // rxmem is an unsigned long array of [CORES-1][MEMBUF]
@@ -173,7 +174,8 @@ typedef struct es_msg_t
 typedef struct buffer_t
 {
   //unsigned int txstamp;
-  unsigned int data[DBUFSIZE];
+  //data points to an array of DBUFSIZE words (like in "unsigned int data[DBUFSIZE]")
+  volatile _SPM int *data;
 } buffer_t;
 
 // init patmos (simulated) internals

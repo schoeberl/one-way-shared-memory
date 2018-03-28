@@ -603,9 +603,6 @@ void corethreadeswork(void *noarg) {
     }
   
   }
-  
-  
-  
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -617,12 +614,18 @@ void corethreadeswork(void *noarg) {
 void corethreadsdbwork(void *noarg)
 {
   int cid = get_cpuid();
-  sync_printf(cid, "Core %d started...DOUBLEBUFFERS=%d, DBUFSIZE=%d, TDMSLOTS=%d, WORDS=%d\n", 
-              cid, DOUBLEBUFFERS, DBUFSIZE, TDMSLOTS, WORDS);
+  sync_printf(cid, "Core %d started...DOUBLEBUFFERS=%d, TDMSLOTS=%d, DBUFSIZE=%d, WORDS=%d\n", 
+              cid, DOUBLEBUFFERS, TDMSLOTS, DBUFSIZE, WORDS);
  
-  buffer_t buf_out[DBUFSIZE][TDMSLOTS];
-  buffer_t buf_in[DBUFSIZE][TDMSLOTS];
+  // each tx and rx tdm slot have two (or more) double buffers
+  buffer_t buf_out[TDMSLOTS][DOUBLEBUFFERS];
+  buffer_t buf_in[TDMSLOTS][DOUBLEBUFFERS];
 
+  for(int i=0; i<TDMSLOTS; i++) {
+    for(int j=0; j < DOUBLEBUFFERS; j++){
+      buf_out[i][j].data = &core[cid].tx[i]+(j*DBUFSIZE);          
+    }
+  }
 
   int txcnt = 1;
   int state = 0;
