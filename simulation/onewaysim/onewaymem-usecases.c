@@ -617,8 +617,8 @@ void corethreadeswork(void *noarg) {
 void corethreadsdbwork(void *noarg)
 {
   int cid = get_cpuid();
-  sync_printf(cid, "Core %d started...DBUFSIZE=%d, TDMSLOTS=%d, WORDS=%d\n", 
-              cid, DBUFSIZE, TDMSLOTS, WORDS);
+  sync_printf(cid, "Core %d started...DOUBLEBUFFERS=%d, DBUFSIZE=%d, TDMSLOTS=%d, WORDS=%d\n", 
+              cid, DOUBLEBUFFERS, DBUFSIZE, TDMSLOTS, WORDS);
  
   buffer_t buf_out[DBUFSIZE][TDMSLOTS];
   buffer_t buf_in[DBUFSIZE][TDMSLOTS];
