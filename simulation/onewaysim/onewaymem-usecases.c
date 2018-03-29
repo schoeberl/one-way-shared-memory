@@ -657,8 +657,9 @@ void corethreadsdbwork(void *noarg)
     }
   }
 
-  if (cid !=0) holdandgowork();
   sync_printf(cid, "core %d mission start on cycle %d\n", cid, getcycles());
+  if (cid !=0) 
+    holdandgowork();
 
   int txcnt = 1;
   int state = 0;
@@ -674,10 +675,11 @@ void corethreadsdbwork(void *noarg)
     switch (state) {
       // all tx their buffers
       case 0: {
-        sync_printf(cid, "core %d to tx it's buffer in state 0\n", cid);
+        // UNCOMMENT THIS WHEN NOT DOING MEASUREMENTS
+        //sync_printf(cid, "core %d to tx it's buffer in state 0\n", cid);
         
-        spinwork(TDMSLOTS*WORDS);
-        spinwork(TDMSLOTS*WORDS);  
+        //spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);  
         // first round of tx for the first buffer
         for(int i=0; i<TDMSLOTS; i++) {
           //buf_out[i][0].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
@@ -713,26 +715,46 @@ void corethreadsdbwork(void *noarg)
       // rx buffer core 0  
       case 1: {
         // state work
-        //spinwork(TDMSLOTS*WORDS);
-
         sync_printf(cid, "core %d state 1 on cycle %d\n", cid, getcycles());
         if (cid == 0) holdandgowork();
-        int cyclestamp[5];
-        int lastword[5] = {-1};
+        const int num = 5;
+        
+        int cyclestamp[DOUBLEBUFFERS][num];
+        int lastword[DOUBLEBUFFERS][num];
         int aword = -1;
+        volatile int tmpsum = 0;
         // Now for real-time measurements between core 1 and core 0
-        aword = buf_in[2][0].data[DBUFSIZE-1];
-        for(int i=0; i < 5; i++) {
-          while(aword == buf_in[2][0].data[DBUFSIZE-1]);
-          aword = buf_in[2][0].data[DBUFSIZE-1];
-          cyclestamp[i] = getcycles();
-          // core 1 is in TDM slot 2
-          lastword[i] = buf_in[2][0].data[DBUFSIZE-1];
+        //   remember to comment out the sync_print line that is the first statement for
+        //   state case 0 in the switch
+        const int rxslot = 2; // just pick one
+        const int txcoreid = gettxcorefromrxcoreslot(cid, rxslot);
+        // start by monitoring the last word of the first buffer
+        aword = buf_in[rxslot][0].data[DBUFSIZE-1];
+        for(int i=0; i < num; i++) {
+          for(int j=0; j < DOUBLEBUFFERS; j++){
+            while(aword == buf_in[rxslot][j].data[DBUFSIZE-1]);
+            aword = buf_in[rxslot][j].data[DBUFSIZE-1];
+            cyclestamp[j][i] = getcycles();
+            // core 1 is in TDM slot 2
+            lastword[j][i] = buf_in[rxslot][j].data[DBUFSIZE-1];
+            // some actual work use the active buffer (summing it as an example)
+            for(int k=0; k < DBUFSIZE; k++)
+              tmpsum += buf_in[rxslot][j].data[k];
+          }
         }
-        for(int i=0; i < 5; i++) {
-          sync_printf(cid, "cyclestamp[%d] = %d, lastword[%d](1->) = 0x%08x\n",
-                            i, cyclestamp[i], i, lastword[i]);
+        // capture the real end-time. The last 'cyclestamp' is taken before the 
+        //   buffer is used and would report a too small number
+        int endtime = getcycles();
+        // done with real-time stuff. The rest is for "fun". 
+        for(int i=0; i < num; i++){
+          for(int j=0; j < DOUBLEBUFFERS; j++){
+            sync_printf(cid, "double buffer %d: cyclestamp[%d] = %d, lastword[%d](1->) = 0x%08x\n",
+                              j, i, cyclestamp[j][i], i, lastword[j][i]);
+          }
         }
+        int totalcycles = endtime - cyclestamp[0][0];
+        sync_printf(cid, "total cycles for %d rounds: %d, average = %d\n",
+                         num, totalcycles, totalcycles/num);
 
         if(cid == 0){
           sync_printf(cid, "core 0 in double buffer 0 rx state 1\n", cid);
@@ -751,8 +773,8 @@ void corethreadsdbwork(void *noarg)
               buf_in[i][1].data[1], DBUFSIZE-1, buf_in[i][1].data[DBUFSIZE-1]);
           }
 
-          // check if txcnt increase is detected
-          if(buf_in[0][1].data[0] - buf_in[0][0].data[0] == 1)
+          // check rough timing
+          if(totalcycles < 1e6)
             sync_printf(cid, "use case 4 ok!\n", cid);
           else
             sync_printf(cid, "use case 4 not ok!\n", cid);
