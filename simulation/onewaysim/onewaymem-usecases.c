@@ -639,10 +639,10 @@ void corethreadsdbwork(void *noarg)
   for(int i=0; i<TDMSLOTS; i++){
     for(int j=0; j < DOUBLEBUFFERS; j++){
       buf_out[i][j].data = (volatile _IODEV int *) (core[cid].tx[i] + (j*DBUFSIZE));  
-      sync_printf(cid, "core[cid].tx[i] = %p, (j*DBUFSIZE) = %d\n",
-                       core[cid].tx[i], (j*DBUFSIZE));
-      sync_printf(cid, "buf_out[tdm=%d][dbuf=%d].data address = %p\n", 
-                  i, j, buf_out[i][j].data);     
+      sync_printf(cid, "&core[cid].tx[i][1] = %p, (j*DBUFSIZE) = %d\n",
+                       &core[cid].tx[i][1], (j*DBUFSIZE));
+      sync_printf(cid, "&buf_out[tdm=%d][dbuf=%d].data[1] address = %p\n", 
+                       i, j, &buf_out[i][j].data[1]);     
       for(int k=0; k < DBUFSIZE; k++){
         buf_out[i][j].data[k] = 0;
       }
@@ -719,16 +719,16 @@ void corethreadsdbwork(void *noarg)
         if(cid == 0){
           sync_printf(cid, "core 0 in double buffer 0 rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            sync_printf(cid, "buf_in[%d](->%d)=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-                             i, gettxcorefromrxcoreslot(cid, i), buf_in[0][i].data[0], 
-                             buf_in[0][i].data[1], DBUFSIZE-1, buf_in[0][i].data[DBUFSIZE-1]);
+            sync_printf(cid, "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+                             i, gettxcorefromrxcoreslot(cid, i), buf_in[i][0].data[0], 
+                             buf_in[i][0].data[1], DBUFSIZE-1, buf_in[i][0].data[DBUFSIZE-1]);
           }
 
           sync_printf(cid, "core 0 in double buffer 1 rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            sync_printf(cid, "buf_in[%d](->%d)=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-                             i, gettxcorefromrxcoreslot(cid, i), buf_in[1][i].data[0], 
-                             buf_in[1][i].data[1], DBUFSIZE-1, buf_in[1][i].data[DBUFSIZE-1]);
+            sync_printf(cid, "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+                             i, gettxcorefromrxcoreslot(cid, i), buf_in[i][1].data[0], 
+                             buf_in[i][1].data[1], DBUFSIZE-1, buf_in[i][1].data[DBUFSIZE-1]);
           }
           
           // check if txcnt increase is detected
