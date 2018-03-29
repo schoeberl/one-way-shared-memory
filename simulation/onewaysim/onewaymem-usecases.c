@@ -639,8 +639,8 @@ void corethreadsdbwork(void *noarg)
   for(int i=0; i<TDMSLOTS; i++){
     for(int j=0; j < DOUBLEBUFFERS; j++){
       buf_out[i][j].data = (volatile _IODEV int *) (core[cid].tx[i] + (j*DBUFSIZE));  
-      sync_printf(cid, "&core[cid].tx[i][1] = %p, (j*DBUFSIZE) = %d\n",
-                       &core[cid].tx[i][1], (j*DBUFSIZE));
+      //sync_printf(cid, "&core[cid].tx[i][1] = %p, (j*DBUFSIZE) = %d\n",
+      //                 &core[cid].tx[i][1], (j*DBUFSIZE));
       sync_printf(cid, "&buf_out[tdm=%d][dbuf=%d].data[1] address = %p\n", 
                        i, j, &buf_out[i][j].data[1]);     
       for(int k=0; k < DBUFSIZE; k++){
@@ -657,80 +657,100 @@ void corethreadsdbwork(void *noarg)
     }
   }
 
-  holdandgowork();
+  if (cid !=0) holdandgowork();
   sync_printf(cid, "core %d mission start on cycle %d\n", cid, getcycles());
 
   int txcnt = 1;
   int state = 0;
-  while (runcores) {
-    // NOC CONTROL SECTION BY CORE 0//
-    static int roundstate = 0;
-    // max state before core 0 stops the mission
-    const int MAXROUNDSTATE = 2;
-    if (cid == 0){
-      if(roundstate == MAXROUNDSTATE) {
-        // signal to stop the slave cores
-        runcores = false; 
-        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
-      }  
-      roundstate++;
-    }
-       
+  // used by core 0
+  int roundstate = 0;
+  const int MAXROUNDSTATE = 1;
+  if(cid == 0) state++;
+  
+  do {  
     // CORE WORK SECTION //  
     // individual core states incl 0
+    
     switch (state) {
       // all tx their buffers
       case 0: {
         sync_printf(cid, "core %d to tx it's buffer in state 0\n", cid);
         
+        spinwork(TDMSLOTS*WORDS);
+        spinwork(TDMSLOTS*WORDS);  
         // first round of tx for the first buffer
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[i][0].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=1; j < DBUFSIZE; j++){
-            buf_out[i][0].data[j] = cid + j;
+          //buf_out[i][0].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=0; j < DBUFSIZE; j++){
+            buf_out[i][0].data[j] = 2*cid*0x10000000 + i*0x1000000 + j*10000 + txcnt;
           }
+          //sync_printf(cid, 
+          //  "buf_out[%d](%d->).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+          //  i, getrxcorefromtxcoreslot(cid, i), buf_out[i][0].data[0], 
+          //  buf_out[i][0].data[1], DBUFSIZE-1, buf_out[i][0].data[DBUFSIZE-1]);
         }
         txcnt++;  
         
         // second round of tx for the second buffer
         for(int i=0; i<TDMSLOTS; i++) {
-          buf_out[i][1].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=1; j < DBUFSIZE; j++){
-            buf_out[i][1].data[j] = cid + j;
+          //buf_out[i][1].data[0] = cid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+          for(int j=0; j < DBUFSIZE; j++){
+            buf_out[i][1].data[j] = cid*0x10000000 + i*0x1000000 + j*10000 + txcnt;
           }
+          //sync_printf(cid, 
+          //  "buf_out[%d](%d->).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+          //  i, getrxcorefromtxcoreslot(cid, i), buf_out[i][1].data[0], 
+          //  buf_out[i][1].data[1], DBUFSIZE-1, buf_out[i][1].data[DBUFSIZE-1]);
         }
         txcnt++;  
                 
-        spinwork(TDMSLOTS*WORDS);
-        spinwork(TDMSLOTS*WORDS);
-        
         // next state
         if (true) {
-          state++;
+          //state++;
         }
         break;
       }
       // rx buffer core 0  
       case 1: {
         // state work
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
+
         sync_printf(cid, "core %d state 1 on cycle %d\n", cid, getcycles());
-        
+        if (cid == 0) holdandgowork();
+        int cyclestamp[5];
+        int lastword[5] = {-1};
+        int aword = -1;
+        // Now for real-time measurements between core 1 and core 0
+        aword = buf_in[2][0].data[DBUFSIZE-1];
+        for(int i=0; i < 5; i++) {
+          while(aword == buf_in[2][0].data[DBUFSIZE-1]);
+          aword = buf_in[2][0].data[DBUFSIZE-1];
+          cyclestamp[i] = getcycles();
+          // core 1 is in TDM slot 2
+          lastword[i] = buf_in[2][0].data[DBUFSIZE-1];
+        }
+        for(int i=0; i < 5; i++) {
+          sync_printf(cid, "cyclestamp[%d] = %d, lastword[%d](1->) = 0x%08x\n",
+                            i, cyclestamp[i], i, lastword[i]);
+        }
+
         if(cid == 0){
           sync_printf(cid, "core 0 in double buffer 0 rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            sync_printf(cid, "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-                             i, gettxcorefromrxcoreslot(cid, i), buf_in[i][0].data[0], 
-                             buf_in[i][0].data[1], DBUFSIZE-1, buf_in[i][0].data[DBUFSIZE-1]);
+            sync_printf(cid, 
+              "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+              i, gettxcorefromrxcoreslot(cid, i), buf_in[i][0].data[0], 
+              buf_in[i][0].data[1], DBUFSIZE-1, buf_in[i][0].data[DBUFSIZE-1]);
           }
 
           sync_printf(cid, "core 0 in double buffer 1 rx state 1\n", cid);
           for(int i=0; i<TDMSLOTS; i++) {
-            sync_printf(cid, "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-                             i, gettxcorefromrxcoreslot(cid, i), buf_in[i][1].data[0], 
-                             buf_in[i][1].data[1], DBUFSIZE-1, buf_in[i][1].data[DBUFSIZE-1]);
+            sync_printf(cid, 
+              "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+              i, gettxcorefromrxcoreslot(cid, i), buf_in[i][1].data[0], 
+              buf_in[i][1].data[1], DBUFSIZE-1, buf_in[i][1].data[DBUFSIZE-1]);
           }
-          
+
           // check if txcnt increase is detected
           if(buf_in[0][1].data[0] - buf_in[0][0].data[0] == 1)
             sync_printf(cid, "use case 4 ok!\n", cid);
@@ -745,7 +765,7 @@ void corethreadsdbwork(void *noarg)
 
         // next state    
         if (true) { 
-          state++;
+          //state++;
         }
         break;
       }
@@ -755,10 +775,18 @@ void corethreadsdbwork(void *noarg)
           break;
       }
     }
-  
-  }
+    // NOC CONTROL SECTION BY CORE 0//
+    // max state before core 0 stops the mission
+    if (cid == 0){
+      roundstate++;
+      if(roundstate >= MAXROUNDSTATE) {
+        // signal to stop the slave cores (and core 0)
+        runcores = false; 
+        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+      }  
+    } 
+  } while (runcores);
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Control code for communication patterns
