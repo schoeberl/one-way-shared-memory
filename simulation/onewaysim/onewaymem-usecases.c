@@ -148,8 +148,6 @@ void corethreadtbswork(void *noarg) {
       }  
       roundstate++;
     }
-    
-
       
     // individual core states incl 0
     switch (state) {
@@ -285,10 +283,14 @@ void triggerhandshakework(int cid)
 
 void corethreadhswork(void *noarg)
 {
+  // set this to 0 when doing measurements
+  int printon = 0;
   int cid = get_cpuid();
   int step = 0;
   int txcnt = 1;
   unsigned int hyperperiod = 0xFFFFFFFF;
+  int starttime = -1;
+  int endtime = -1;
 
   // set up the use case so all cores will send a handshake message to the other cores
   // and receive the appropriate acknowledgement
@@ -298,6 +300,8 @@ void corethreadhswork(void *noarg)
   handshakeack_t hmsg_ack_in[TDMSLOTS];
 
   sync_printf(cid, "in corethreadhsp(%d)...\n", cid);
+  sync_printf(cid, "sizeof(handshakemsg_t)=%d\n", sizeof(handshakemsg_t));
+  sync_printf(cid, "sizeof(handshakeack_t)=%d\n", sizeof(handshakeack_t));
   
   //unsigned int tdmround[TDMSLOTS];
   // previous hyperperiod (used to detect/poll for new hyperperiod)
@@ -309,6 +313,7 @@ void corethreadhswork(void *noarg)
 
   int state = 0;
   const int donestate = 100;
+  holdandgowork();
   while (runcores) {
     // NOC CONTROL SECTION //
     // overall "noc state" handled by poor core 0 as a sidejob 
@@ -331,7 +336,7 @@ void corethreadhswork(void *noarg)
       case 0: {
         // state work
         sync_printf(cid, "core %d tx state 0\n", cid);
-        
+        starttime = getcycles();
         // prepare the handshaked messages
         for(int i=0; i < TDMSLOTS; i++){ 
           // txstamp in first word
@@ -364,7 +369,7 @@ void corethreadhswork(void *noarg)
         }
         
         txcnt++;  
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
         
         // next state
         if (true) {
@@ -375,7 +380,7 @@ void corethreadhswork(void *noarg)
       // rx messages, check them and ack them 
       case 1: {
         // state work
-        sync_printf(cid, "core %d msg rx state 1\n", cid);        
+        if(printon) sync_printf(cid, "core %d msg rx state 1\n", cid);        
         
         for(int i=0; i<TDMSLOTS; i++) { 
           hmsg_in[i].txstamp =  core[cid].rx[i][0];
@@ -389,14 +394,14 @@ void corethreadhswork(void *noarg)
           hmsg_in[i].data2 =    core[cid].rx[i][6];
           // block identifier
           hmsg_in[i].blockno =  core[cid].rx[i][7];
-          sync_printf(cid, "hmsg_in[%d](%d) 0x%08x 0x%08x 0x%08x 0x%08x\n",
+          if(printon) sync_printf(cid, "hmsg_in[%d](%d) 0x%08x 0x%08x 0x%08x 0x%08x\n",
             i, getrxcorefromtxcoreslot(cid,i),
             core[cid].rx[i][0], core[cid].rx[i][1], core[cid].rx[i][2], core[cid].rx[i][3]);
-          sync_printf(cid, "              0x%08x 0x%08x 0x%08x 0x%08x\n",
+          if(printon) sync_printf(cid, "              0x%08x 0x%08x 0x%08x 0x%08x\n",
             core[cid].rx[i][4], core[cid].rx[i][5], core[cid].rx[i][6], core[cid].rx[i][7]);
         }
         recordhyperperiodwork(&prevhyperperiod[0]);
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
         
        
         
@@ -411,8 +416,8 @@ void corethreadhswork(void *noarg)
         
       case 2: {
         // state work
-        sync_printf(cid, "core %d ack tx state 2\n", cid);        
-        spinwork(TDMSLOTS*WORDS);
+        if(printon) sync_printf(cid, "core %d ack tx state 2\n", cid);        
+        //spinwork(TDMSLOTS*WORDS);
         // prepare the acks (if the msg was ok)
         for(int i=0; i < TDMSLOTS; i++){ 
           bool msgok = (hmsg_in[i].tocore == cid) && (hmsg_in[i].length == HANDSHAKEMSGSIZE);
@@ -433,12 +438,12 @@ void corethreadhswork(void *noarg)
           }
           
           if(msgok){
-            sync_printf(cid, "hmsg_ack[%d] ack (blockno %d) sent to core %d\n",
+            if(printon) sync_printf(cid, "hmsg_ack[%d] ack (blockno %d) sent to core %d\n",
                         i, hmsg_ack_out[i].blockno, hmsg_ack_out[i].tocore);
           }
         }       
         recordhyperperiodwork(&prevhyperperiod[0]);
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
         //next state
         if (true) {
           state++;
@@ -448,20 +453,29 @@ void corethreadhswork(void *noarg)
       
       case 3: {
         // state work
-        sync_printf(cid, "core %d ack rx state 3\n", cid);    
+        if (printon) sync_printf(cid, "core %d ack rx state 3\n", cid);    
         for(int i=0; i<TDMSLOTS; i++) { 
           hmsg_ack_in[i].txstamp =  core[cid].rx[i][0];
           hmsg_ack_in[i].fromcore = core[cid].rx[i][1];          
           hmsg_ack_in[i].tocore =   core[cid].rx[i][2];
           // block identifier that is acknowledged
           hmsg_ack_in[i].blockno =  core[cid].rx[i][3];
-          sync_printf(cid, "hmsg_ack_in[%d](%d) 0x%08x 0x%08x 0x%08x 0x%08x\n",
-            i, getrxcorefromtxcoreslot(cid,i),
-            hmsg_ack_in[i].txstamp, hmsg_ack_in[i].fromcore, 
-            hmsg_ack_in[i].tocore, hmsg_ack_in[i].blockno);
+
         }
+        endtime = getcycles();
+        // end of real-time measurement
         
-        // check use 2
+        sync_printf(cid, "core %d (done) ack rx state 3\n", cid);  
+        for(int i=0; i<TDMSLOTS; i++) { 
+          sync_printf(cid, "hmsg_ack_in[%d](%d) 0x%08x 0x%08x 0x%08x 0x%08x\n",
+          i, getrxcorefromtxcoreslot(cid,i),
+          hmsg_ack_in[i].txstamp, hmsg_ack_in[i].fromcore, 
+          hmsg_ack_in[i].tocore, hmsg_ack_in[i].blockno);
+        }     
+        sync_printf(cid, "endtime %d - starttime %d = %d cycles\n",
+                         endtime, starttime, endtime-starttime); 
+        
+        //check use 2
         for(int i=0; i<TDMSLOTS; i++) { 
           int ackok = (hmsg_out[i].blockno == hmsg_ack_in[i].blockno) && 
                       (hmsg_ack_in[i].fromcore == gettxcorefromrxcoreslot(cid, i)) &&
@@ -472,7 +486,7 @@ void corethreadhswork(void *noarg)
             sync_printf(cid, "Error: use case 2 not ok (from %d)!\n", hmsg_ack_in[i].fromcore);
             
         }
-        spinwork(TDMSLOTS*WORDS);
+        //spinwork(TDMSLOTS*WORDS);
 
         // next state    
         if (true) { 
@@ -574,7 +588,8 @@ void corethreadeswork(void *noarg) {
           esmsg_in[cid].sensorval = core[cid].rx[core0slot][2];
           
           sync_printf(cid, "esmsg_in[%d](%d) 0x%08x 0x%08x 0x%08x\n",
-              core0slot, 0, esmsg_in[cid].txstamp, esmsg_in[cid].sensorid, esmsg_in[cid].sensorval);
+              core0slot, 0, esmsg_in[cid].txstamp, esmsg_in[cid].sensorid, 
+              esmsg_in[cid].sensorval);
         } else {
           sync_printf(cid, "core %d no work in this state\n", cid);
         }
