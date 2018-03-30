@@ -284,7 +284,8 @@ void triggerhandshakework(int cid)
 void corethreadhswork(void *noarg)
 {
   // set this to 0 when doing measurements
-  int printon = 0;
+  //   if you forget then print statements add about 1e6 cycles to the result!
+  int printon = 1;
   int cid = get_cpuid();
   int step = 0;
   int txcnt = 1;
@@ -401,10 +402,7 @@ void corethreadhswork(void *noarg)
             core[cid].rx[i][4], core[cid].rx[i][5], core[cid].rx[i][6], core[cid].rx[i][7]);
         }
         recordhyperperiodwork(&prevhyperperiod[0]);
-        //spinwork(TDMSLOTS*WORDS);
-        
-       
-        
+
         txcnt++;    
 
         // next state    
@@ -539,8 +537,10 @@ void corethreadeswork(void *noarg) {
       // tx messages
       case 0: {
         // state work
-        if(cid == 0)
+        if(cid == 0){
           sync_printf(cid, "core %d to tx sensor state exchange\n", cid);
+          sync_printf(cid, "sizeof(es_msg_t) = %d\n", sizeof(es_msg_t));
+        }
         else
           sync_printf(cid, "core %d no work in state 0\n", cid);
         
