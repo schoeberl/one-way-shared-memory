@@ -28,7 +28,7 @@ static volatile _UNCACHED int printtoken = -1;
 static volatile _UNCACHED bool firsttime = true;
 
 // used for synchronizing printf from the different cores
-unsigned int getcycles()
+int getcycles()
 {
 #ifdef RUNONPATMOS
   volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; 
@@ -36,7 +36,7 @@ unsigned int getcycles()
 #else
   clock_t now_t;
   now_t = clock();
-  return (unsigned int)now_t;
+  return (int)now_t;
 #endif
 }
 
@@ -54,6 +54,7 @@ void sync_printf(int cid, const char *format, ...)
     va_list args;
     va_start(args, format);
     vsprintf(&strings[cid][mi[cid]][0], format, args);
+ //printf(format, args);
     //printf("cid %d: %s\n", cid, strings[cid][mi[cid]]);
     va_end(args);
     mi[cid]++;

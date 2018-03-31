@@ -12,13 +12,16 @@
 #include <math.h>
 
 #ifdef __patmos__
-#define RUNONPATMOS
+  #define RUNONPATMOS
 #endif
 
 #ifdef RUNONPATMOS
-#include "libcorethread/corethread.h"
+  #include "libcorethread/corethread.h"
 #else
-#include <pthread.h>
+  #define _SPM
+  #define _IODEV
+  #define _UNCACHED
+  #include <pthread.h>
 #endif
 
 // NoC setup
@@ -80,14 +83,9 @@
 //extern unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
 
 // patmos hardware registers provided via Scala HDL
-#ifdef RUNONPATMOS
 volatile _UNCACHED bool runcores;
 volatile _UNCACHED bool coreready[CORES];
-typedef volatile _UNCACHED unsigned long PATMOS_REGISTER;
-#else
-volatile bool runcores;
-typedef volatile unsigned long PATMOS_REGISTER;
-#endif
+typedef volatile _UNCACHED unsigned int PATMOS_REGISTER;
 
 // defined patmos hardware registers (simulated)
 // we do not have one for the SLOT counter in the simulator
@@ -192,7 +190,7 @@ void nocwaitdone();
 void simcontrol();
 #endif
 
-void corethreadtbswork(void *noarg);
+void corethreadtbswork(void *cidptr);
 void corethreadhswork(void *noarg);
 void corethreadeswork(void *noarg);
 void corethreadsdbwork(void *noarg);
@@ -207,6 +205,12 @@ void txrxmapsinit();
 int getrxcorefromtxcoreslot(int txcore, int txslot);
 // get the tx core based on tx core and rx (TDM) slot index
 int gettxcorefromrxcoreslot(int rxcore, int rxslot);
+
+
+#ifndef RUNONPATMOS
+  extern pthread_t cpu_id_tid[CORES];
+  int get_cpuid();
+#endif
 
 // the two new ones (todo: merge)
 void initroutestrings();

@@ -2,6 +2,7 @@
 #define SYNCPRINT_H
 #include <math.h>
 #include <locale.h>
+#include "onewaysim.h"
 
 #ifdef __patmos__
 #include "libcorethread/corethread.h"
@@ -33,6 +34,6 @@ void sync_printall();
 // Printing just for one core at a time
 void sync_print_core(int id);
 // get cycles (patmos) or time (pc)
-unsigned int getcycles();
+int getcycles();
 #endif
 
