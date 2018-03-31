@@ -125,11 +125,8 @@ void recordhyperperiodwork(int cpuid, unsigned int* hyperperiods){
 // detect changes in HYPERPERIOD_REGISTER and TDMROUND_REGISTER
 void corethreadtbswork(void *cpuidptr) {
   int state = 0;
-printf("in in corethreadtbs..0\n");
   int cpuid = *((int*) cpuidptr);
-printf("in in corethreadtbs..0.1 cpuid = %d\n", cpuid);
   sync_printf(cpuid, "in corethreadtbs(%d)...\n", cpuid);
-printf("in in corethreadtbs..1\n");
   unsigned int tdmround[TDMSLOTS];
   // previous hyperperiod (used to detect/poll for new hyperperiod)
   unsigned int prevhyperperiod[TDMSLOTS];
@@ -155,6 +152,9 @@ printf("in in corethreadtbs..1\n");
     // the statemachine will reach this state below
     const int MAXROUNDSTATE = 4;
     if (cpuid == 0){
+      #ifndef RUNONPATMOS
+        simcontrol();
+      #endif
       if(roundstate == MAXROUNDSTATE) {
         // signal to stop the slave cores
         runcores = false; 
@@ -231,7 +231,7 @@ printf("in in corethreadtbs..1\n");
         // state work
         startcycle = getcycles();
         sync_printf(cpuid, "core %d rx state 3\n", cpuid);  
-        bool nextstatetbstrigger = true;//false;
+        bool nextstatetbstrigger = false;
         
         bool trigger[TDMSLOTS] = {false};
         

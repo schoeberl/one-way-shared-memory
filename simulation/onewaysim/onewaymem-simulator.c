@@ -27,7 +27,7 @@ pthread_t *threadHandles;
 // called repeatedly from core 0
 void simcontrol()
 {
-  sync_printf(0, "in noccontrol()...\n");
+  sync_printf(0, "in simcontrol()...because we are simulating on the PC\n");
 
   // change this to the number of runs you want
   const int hyperperiodstorun = 5;
@@ -70,18 +70,15 @@ void simcontrol()
   sync_printf(0, "leaving noccontrol()...\n");
 }
 
-
-void nocmem()
-{
+void nocmem() {
   // map ms's alltxmem and allrxmem to each core's local memory
-  for (int i = 0; i < CORES; i++)
-  { 
-    for (int j = 0; j < CORES - 1; j++)
-    { // assign membuf addresses from allrx and alltx to rxmem and txmem
+  for (int i = 0; i < CORES; i++) { 
+    for (int j = 0; j < CORES - 1; j++) { 
+      // assign membuf addresses from allrx and alltx to rxmem and txmem
       core[i].tx[j] = alltxmem[i][j];
       core[i].rx[j] = allrxmem[i][j];
-      for (int m = 0; m < MEMBUF; m++)
-      { // zero the tx and rx membuffer slots
+      for (int m = 0; m < MEMBUF; m++) { 
+        // zero the tx and rx membuffer slots
         core[i].tx[j][m] = 0;
         core[i].rx[j][m] = 0;
       }
@@ -104,19 +101,16 @@ void nocinit()
   // init signals and counters
   HYPERPERIOD_REGISTER = 0;
   TDMROUND_REGISTER = 0;
-  for (int c = 0; c < CORES; c++)
-  {
+  for (int c = 0; c < CORES; c++) {
     coreid[c] = c;
   }
 
   // start the "slave" cores
-  for (int c = 1; c < CORES; c++)
-  {
+  for (int c = 1; c < CORES; c++) {
     //the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void*
     pthread_create(&threadHandles[c], NULL, (void *(*)(void *)) &corethreadtbswork, 
                    &coreid[c]);
   }
-  printf("in nocinit()..0\n");
 }
 
 void noccontrol()
@@ -163,10 +157,6 @@ int main(int argc, char *argv[])
   printf("leaving main...\n");
   printf("***********************************************************\n");
   printf("***********************************************************\n");
-  printf("TX AND RX MAPPING TESTING:\n");
-  initroutestrings();
-  //inittxrxmaps();
-  showmappings();
   return 0;
 }
 
