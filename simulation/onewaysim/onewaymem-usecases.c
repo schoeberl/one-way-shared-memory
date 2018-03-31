@@ -150,7 +150,7 @@ void corethreadtbswork(void *cpuidptr) {
     // overall "noc state" handled by poor core 0 as a sidejob 
     static int roundstate = 0;
     // the statemachine will reach this state below
-    const int MAXROUNDSTATE = 4;
+    const int MAXROUNDSTATE = 1;
     if (cpuid == 0){
       #ifndef RUNONPATMOS
         simcontrol();
@@ -184,7 +184,7 @@ void corethreadtbswork(void *cpuidptr) {
           state = 3;
         else 
           state = 2;
-        
+        sync_printf(cpuid, "core %d tx state 0, new state=%d\n", cpuid, state);
         
         break;
       }
@@ -231,7 +231,7 @@ void corethreadtbswork(void *cpuidptr) {
         // state work
         startcycle = getcycles();
         sync_printf(cpuid, "core %d rx state 3\n", cpuid);  
-        bool nextstatetbstrigger = false;
+        bool nextstatetbstrigger = true;//false;
         
         bool trigger[TDMSLOTS] = {false};
         

@@ -142,7 +142,7 @@ void sync_print_core(int id)
       }
     }
     if (closestcoreid == id){
-      printf("[cy%'d id%02d #%02d] %s", 
+      printf("[cyc%d cpuid%02d #%02d] %s", 
              (int)timestamps[closestcoreid][minmark[closestcoreid]], 
              closestcoreid, minmark[closestcoreid], 
              strings[closestcoreid][minmark[closestcoreid]]);

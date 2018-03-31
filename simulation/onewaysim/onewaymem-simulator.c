@@ -55,7 +55,7 @@ void simcontrol()
       }
     } // tdmround ends
     TDMROUND_REGISTER++;
-    sync_printf(0, "TDMROUND_REGISTER = %lu\n", TDMROUND_REGISTER);
+    //sync_printf(0, "TDMROUND_REGISTER = %lu\n", TDMROUND_REGISTER);
     //usleep(100000); //much slower than the cores on purpose, so they can poll
   }
   HYPERPERIOD_REGISTER++;
@@ -66,8 +66,8 @@ void simcontrol()
   TDMROUND_REGISTER = 0;
 
   hyperperiod++;
-  runcores = false;
-  sync_printf(0, "leaving noccontrol()...\n");
+  //runcores = false;
+  sync_printf(0, "leaving simcontrol()...\n");
 }
 
 void nocmem() {
@@ -151,8 +151,12 @@ int main(int argc, char *argv[])
   corethreadtbswork(&coreid[0]);
   // core 0 is done, wait for the others
   nocdone();
-  sync_printf(0, "done...\n");
-  sync_printall();
+  printf("Done...\n");
+  
+  for (int i=0; i<CORES; ++i) {
+    printf("Sync print from core %d:\n", i);
+    sync_print_core(i);
+  }
 
   printf("leaving main...\n");
   printf("***********************************************************\n");
