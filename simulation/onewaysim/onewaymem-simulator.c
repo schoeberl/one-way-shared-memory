@@ -88,7 +88,7 @@ void nocmem() {
 
 // patmos memory initialization
 // function pointer to one of the test cases
-void nocinit()
+void nocinit(void (*corefuncptr)(void *))
 {
   sync_printf(0, "in nocinit()...\n");
   txrxmapsinit();
@@ -108,7 +108,7 @@ void nocinit()
   // start the "slave" cores
   for (int c = 1; c < CORES; c++) {
     //the typecast 'void * (*)(void *)' is because pthread expects a function that returns a void*
-    pthread_create(&threadHandles[c], NULL, (void *(*)(void *)) &corethreadtbswork, 
+    pthread_create(&threadHandles[c], NULL, (void *(*)(void *)) corefuncptr, 
                    &coreid[c]);
   }
 }
@@ -144,13 +144,58 @@ int main(int argc, char *argv[])
   printf("***********************************************************\n");
   printf("onewaysim-target main(): **********************************\n");
   printf("***********************************************************\n");
+  
+  if( argc == 2 ) {
+    printf("The argument supplied is %s\n", argv[1]);
+  }
+  else if( argc > 2 ) {
+    printf("Too many arguments supplied.\n");
+  }
+  else {
+    printf("One argument expected such as \"1\".\n");
+  }
+  
+  void (*corefuncptr)(void *);
+  if (strcmp(argv[1], "U0") == 0) 
+  {
+    corefuncptr = &corethreadtbswork;
+  } 
+  else if (strcmp(argv[1], "U1") == 0) {
+    corefuncptr = &corethreadhswork;
+  } 
+  else if (strcmp(argv[1], "U2") == 0) {
+    corefuncptr = &corethreadeswork;
+  } 
+  else if (strcmp(argv[1], "U3") == 0) {
+    corefuncptr = &corethreadsdbwork;
+  }  
+  
+  
   //start the other cores
   runcores = true;
-  nocinit();
-  // "start" ourself (core 0)
-  corethreadtbswork(&coreid[0]);
+  
+  // Use case 1
+  //void (*corefuncptr)(void *) = &corethreadtbswork;
+  //corethreadtbswork(&coreid[0]);
+  
+  // use case 2, handshake:       corethreadhswork
+  // void (*corefuncptr)(void *) =corethreadhswork;
+
+  // use case 3, state exchange:  corethreadeswork
+  //void (*corefuncptr)(void *) = &corethreadeswork;
+
+  // use case 4: corethreadsdbwork
+  //void (*corefuncptr)(void *) = &corethreadsdbwork; 
   // core 0 is done, wait for the others
+  
+  // start the slave threads
+  nocinit(corefuncptr);
+  
+  // "start" core 0
+  corefuncptr(&coreid[0]);
+  
   nocdone();
+  
   printf("Done...\n");
   
   for (int i=0; i<CORES; ++i) {

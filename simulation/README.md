@@ -10,8 +10,10 @@ The source code is split in three parts. One part that runs only on the PC (the 
 
 The `doit` target is for PC-based simulation. `RUNONPATMOS` must not be defined.
 
-The `onpatmos` target is for running on patmos. In the file `onewaymem-patmos_onewaysim.c` you must comment in the use-case to be executed. The following would execute use-case 3:
+The `onpatmos` target is for running on patmos. 
+
+A speciffic use-case is run by supplying the use-case identifier to the respective make target. The following would execute use-case 0 on the PC:
+
 ```
-// use case 3, state exchange:  corethreadeswork
-void (*corefuncptr)(void *) = &corethreadeswork;
+make usecase=U0 doit
 ```

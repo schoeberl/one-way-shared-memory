@@ -124,8 +124,10 @@ void recordhyperperiodwork(int cpuid, unsigned int* hyperperiods){
 // the cores
 // detect changes in HYPERPERIOD_REGISTER and TDMROUND_REGISTER
 void corethreadtbswork(void *cpuidptr) {
+
   int state = 0;
   int cpuid = *((int*) cpuidptr);
+  printf("---in corethreadtbs(%d)...\n", cpuid);
   sync_printf(cpuid, "in corethreadtbs(%d)...\n", cpuid);
   unsigned int tdmround[TDMSLOTS];
   // previous hyperperiod (used to detect/poll for new hyperperiod)

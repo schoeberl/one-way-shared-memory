@@ -10,7 +10,7 @@ help:
 doit: 
 	rm -f ./a.out
 	cd onewaysim && $(CC) -I$(PATMOSHOME)/../newlib/newlib/libc/machine/patmos -pthread -g $(HOSTSOURCEFILES)
-	cd onewaysim && ./a.out
+	cd onewaysim && ./a.out $(usecase)
 
 #use this target if there is a segmentation fault from your code in the 'doit' target
 #  after running the 'doit' target
