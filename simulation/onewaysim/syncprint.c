@@ -37,6 +37,9 @@ int getcycles()
   clock_t now_t;
   now_t = clock();
   return (int)now_t;
+  //unsigned long a, d;
+  //__asm__ volatile ("rdtsc" : "=a" (a), "=d" (d));
+  //return (int)a;
 #endif
 }
 
@@ -44,7 +47,7 @@ int getcycles()
 void sync_printf(int cid, const char *format, ...)
 {
   //uncomment next line to run with shared mutex
-  //while(printtoken != -1){};
+  while(printtoken != -1){};
   
   printtoken = cid;
   if (mi[cid] < SYNCPRINTBUF)

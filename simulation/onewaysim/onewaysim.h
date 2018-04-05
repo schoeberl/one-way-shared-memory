@@ -10,6 +10,8 @@
 */
 
 #include <math.h>
+#include <stdint.h>
+#include <inttypes.h>
 
 #ifdef __patmos__
   #define RUNONPATMOS
@@ -224,5 +226,8 @@ extern volatile _SPM int *allrxmem;
 extern int alltxmem[CORES][CORES - 1][MEMBUF];
 extern int allrxmem[CORES][CORES - 1][MEMBUF];
 #endif
+
+//unsigned int rdtsc();
+
 
 #endif

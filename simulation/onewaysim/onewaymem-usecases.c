@@ -561,7 +561,7 @@ void corethreadeswork(void *cpuidptr) {
           sync_printf(cpuid, "core %d no work in state 0\n", cpuid);
         
         unsigned int sensestart = getcycles();
-        while(getcycles()-sensestart < CPUFREQ/SENSORUPDATEHZ);
+//        while(getcycles()-sensestart < CPUFREQ/SENSORUPDATEHZ);
         
         // Prepare the sensor reading that is transmitted from core 0 to all the other cores
         if (cpuid == 0) {
@@ -647,7 +647,8 @@ void corethreadsdbwork(void *cpuidptr)
   int cpuid = *((int*)cpuidptr);
   sync_printf(cpuid, "Core %d started...DOUBLEBUFFERS=%d, TDMSLOTS=%d, DBUFSIZE=%d, WORDS=%d\n", 
               cpuid, DOUBLEBUFFERS, TDMSLOTS, DBUFSIZE, WORDS);
- 
+ printf("Core %d started...DOUBLEBUFFERS=%d, TDMSLOTS=%d, DBUFSIZE=%d, WORDS=%d\n", 
+              cpuid, DOUBLEBUFFERS, TDMSLOTS, DBUFSIZE, WORDS);
   // setup: each tx and rx tdm slot have two (or more) double buffers
   // each buffer_t represents one (of at least two) for each TDM slot (each 
   //   TDM slot is WORDS long)
@@ -689,8 +690,8 @@ void corethreadsdbwork(void *cpuidptr)
   }
 
   sync_printf(cpuid, "core %d mission start on cycle %d\n", cpuid, getcycles());
-  if (cpuid !=0) 
-    holdandgowork(cpuid);
+  //if (cpuid !=0) 
+  //  holdandgowork(cpuid);
 
   int txcnt = 1;
   int state = 0;
@@ -747,7 +748,7 @@ void corethreadsdbwork(void *cpuidptr)
       case 1: {
         // state work
         sync_printf(cpuid, "core %d state 1 on cycle %d\n", cpuid, getcycles());
-        if (cpuid == 0) holdandgowork(cpuid);
+        //if (cpuid == 0) holdandgowork(cpuid);
         const int num = 5;
         
         int cyclestamp[DOUBLEBUFFERS][num];
@@ -763,7 +764,7 @@ void corethreadsdbwork(void *cpuidptr)
         aword = buf_in[rxslot][0].data[DBUFSIZE-1];
         for(int i=0; i < num; i++) {
           for(int j=0; j < DOUBLEBUFFERS; j++){
-            while(aword == buf_in[rxslot][j].data[DBUFSIZE-1]);
+//            while(aword == buf_in[rxslot][j].data[DBUFSIZE-1]);
             aword = buf_in[rxslot][j].data[DBUFSIZE-1];
             cyclestamp[j][i] = getcycles();
             // core 1 is in TDM slot 2
@@ -836,6 +837,7 @@ void corethreadsdbwork(void *cpuidptr)
         // signal to stop the slave cores (and core 0)
         runcores = false; 
         sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+        //printf("core 0 is done, roundstate == false signalled\n");
       }  
     } 
   } while (runcores);

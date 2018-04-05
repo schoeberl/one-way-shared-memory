@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <string.h>
 
+
 #include "onewaysim.h"
 #include "syncprint.h"
 
@@ -138,6 +139,22 @@ void nocdone()
 //Simulator main
 ///////////////////////////////////////////////////////////////////////////////
 
+/* define this somewhere */
+//#ifdef __i386
+//__inline__ uint64_t rdtsc() {
+//  uint64_t x;
+//  __asm__ volatile ("rdtsc" : "=A" (x));
+//  return x;
+//}
+//#elif __amd64
+//unsigned int rdtsc() {
+//  unsigned long a, d;
+//  __asm__ volatile ("rdtsc" : "=a" (a), "=d" (d));
+  //return (d<<32) | a;
+//  return (unsigned int) a;
+//}
+//#endif
+
 // we are core 0
 int main(int argc, char *argv[])
 {
@@ -145,8 +162,27 @@ int main(int argc, char *argv[])
   printf("onewaysim-target main(): **********************************\n");
   printf("***********************************************************\n");
   
+  // thread function poiter which is the use case
+  void (*corefuncptr)(void *);
   if( argc == 2 ) {
-    printf("The argument supplied is %s\n", argv[1]);
+    if (strcmp(argv[1], "U0") == 0) 
+    {
+      corefuncptr = &corethreadtbswork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadtbswork");
+    } 
+    else if (strcmp(argv[1], "U1") == 0) {
+      corefuncptr = &corethreadhswork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadhswork");
+    } 
+    else if (strcmp(argv[1], "U2") == 0) {
+      corefuncptr = &corethreadeswork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadeswork");
+    } 
+    else if (strcmp(argv[1], "U3") == 0) {
+      corefuncptr = &corethreadsdbwork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadsdbwork");
+    } 
+    else printf("The unknown argument supplied is %s\n", argv[1]);
   }
   else if( argc > 2 ) {
     printf("Too many arguments supplied.\n");
@@ -154,21 +190,9 @@ int main(int argc, char *argv[])
   else {
     printf("One argument expected such as \"1\".\n");
   }
+
   
-  void (*corefuncptr)(void *);
-  if (strcmp(argv[1], "U0") == 0) 
-  {
-    corefuncptr = &corethreadtbswork;
-  } 
-  else if (strcmp(argv[1], "U1") == 0) {
-    corefuncptr = &corethreadhswork;
-  } 
-  else if (strcmp(argv[1], "U2") == 0) {
-    corefuncptr = &corethreadeswork;
-  } 
-  else if (strcmp(argv[1], "U3") == 0) {
-    corefuncptr = &corethreadsdbwork;
-  }  
+
   
   
   //start the other cores
@@ -203,8 +227,9 @@ int main(int argc, char *argv[])
     sync_print_core(i);
   }
 
-  printf("leaving main...\n");
+  
   printf("***********************************************************\n");
+  printf("leaving main...done with use-case %s\n", argv[1]);
   printf("***********************************************************\n");
   return 0;
 }
