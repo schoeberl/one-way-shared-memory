@@ -18,14 +18,12 @@
 #include "onewaysim.h"
 #include "syncprint.h"
 
-int alltxmem[CORES][CORES - 1][MEMBUF];
-int allrxmem[CORES][CORES - 1][MEMBUF];
-
-int cpuid[CORES];
+int alltxmem[CORES][TDMSLOTS][WORDS];
+int allrxmem[CORES][TDMSLOTS][WORDS];
 
 pthread_t *threadHandles;
 
-// called repeatedly from core 0
+// called repeatedly from core 0 when *simulating* on the PC
 void simcontrol()
 {
   sync_printf(0, "in simcontrol()...because we are simulating on the PC\n");
@@ -35,7 +33,7 @@ void simcontrol()
 
   // hyperperiod starts
   static int hyperperiod = 0;
-  for (int m = 0; m < MEMBUF; m++)
+  for (int m = 0; m < WORDS; m++)
   {                                                      // one word from each to each
     for (int txcoreid = 0; txcoreid < CORES; txcoreid++) // sender core
     {
@@ -71,15 +69,18 @@ void simcontrol()
   sync_printf(0, "leaving simcontrol()...\n");
 }
 
+// this is the big difference between simulating on the PC
+// on patmos this is done in HW
+// on tht PC this is done using one large memory block (alltxmem and allrxmem)
 void nocmem() {
   // map ms's alltxmem and allrxmem to each core's local memory
   for (int i = 0; i < CORES; i++) { 
-    for (int j = 0; j < CORES - 1; j++) { 
+    for (int j = 0; j < TDMSLOTS; j++) { 
       // assign membuf addresses from allrx and alltx to rxmem and txmem
       core[i].tx[j] = alltxmem[i][j];
       core[i].rx[j] = allrxmem[i][j];
-      for (int m = 0; m < MEMBUF; m++) { 
-        // zero the tx and rx membuffer slots
+      for (int m = 0; m < WORDS; m++) { 
+        // zero out the tx and rx membuffer slots
         core[i].tx[j][m] = 0;
         core[i].rx[j][m] = 0;
       }
@@ -87,7 +88,7 @@ void nocmem() {
   }
 }
 
-// patmos memory initialization
+// simulator memory initialization
 // function pointer to one of the test cases
 void nocinit(void (*corefuncptr)(void *))
 {
@@ -95,8 +96,10 @@ void nocinit(void (*corefuncptr)(void *))
   txrxmapsinit();
   showmappings();
   
+  // not using 0
   threadHandles = calloc(CORES, sizeof(pthread_t));
   
+  // do the memory mapping for running the simulator on the PC
   nocmem();
   
   // init signals and counters
@@ -116,22 +119,22 @@ void nocinit(void (*corefuncptr)(void *))
 
 void noccontrol()
 {
-  sync_printf(0, "simulation control when just running on host PC\n");
+  sync_printf(0, "in noccontrol: simulation control when just running on host PC\n");
   simcontrol();
 }
 
 void nocdone()
 {
-  sync_printf(0, "waiting for cores to join ...\n");
+  sync_printf(0, "in nocdone: waiting for cores to join ...\n");
   int *retval;
   // now let the others join
   for (int c = 1; c < CORES; c++)
   {
-    sync_printf(0, "core thread %d to join...\n", c);
+    sync_printf(0, "in nocdone: core thread %d to join...\n", c);
 // the cores *should* join here...
 
     pthread_join(threadHandles[c], NULL);
-    sync_printf(0, "core thread %d joined\n", c);
+    sync_printf(0, "in nocdone: core thread %d joined\n", c);
   }
 }
 
@@ -161,9 +164,12 @@ int main(int argc, char *argv[])
   printf("***********************************************************\n");
   printf("onewaysim-target main(): **********************************\n");
   printf("***********************************************************\n");
-  
-  // thread function poiter which is the use case
-  void (*corefuncptr)(void *);
+
+  // thread function pointer which is the use case
+  void (*corefuncptr)(void *);  
+  // set a default 
+  corefuncptr = &corethreadtbswork;
+
   if( argc == 2 ) {
     if (strcmp(argv[1], "U0") == 0) 
     {
@@ -188,7 +194,7 @@ int main(int argc, char *argv[])
     printf("Too many arguments supplied.\n");
   }
   else {
-    printf("One argument expected such as \"1\".\n");
+    printf("One argument expected such as \"U1\"\n");
   }
 
   
@@ -227,10 +233,9 @@ int main(int argc, char *argv[])
     sync_print_core(i);
   }
 
-  
-  printf("***********************************************************\n");
-  printf("leaving main...done with use-case %s\n", argv[1]);
-  printf("***********************************************************\n");
+  printf("****************************************************************\n");
+  printf("Leaving main...done with highlevel simulation of use-case %s\n", argv[1]);
+  printf("(Remember: Cycles on the PC simulator is *not* cycles on patmos)\n");
+  printf("****************************************************************\n");
   return 0;
 }
-

@@ -27,8 +27,8 @@
 volatile _SPM int *alltxmem = ONEWAY_BASE;
 volatile _SPM int *allrxmem = ONEWAY_BASE;
 #else
-int alltxmem[CORES][CORES-1][MEMBUF];
-int allrxmem[CORES][CORES-1][MEMBUF];
+int alltxmem[CORES][CORES-1][WORDS];
+int allrxmem[CORES][CORES-1][WORDS];
 #endif
 
 static volatile _UNCACHED int testval = -1;

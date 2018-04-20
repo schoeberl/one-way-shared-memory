@@ -20,6 +20,7 @@
 #ifdef RUNONPATMOS
   #include "libcorethread/corethread.h"
 #else
+  // define as nothing when just simulating on the PC
   #define _SPM
   #define _IODEV
   #define _UNCACHED
@@ -62,6 +63,7 @@
 //   one clock cycle after and hee TX slot 0 is transmitted from MEMBUF[1]. When
 //   TX slot 2 is transmitted from MEMBUF[3], the TDMROUND is finished (and a new one 
 //   starts). 
+
 #define FOURNODES "nel|"\
                   "  nl|"\
                   "   el|"
@@ -70,8 +72,9 @@
 // do edit this to set up the NoC grid and buffer
 #define ROUTESSTRING FOURNODES
 #define CORES FOURNODES_N
-#define MEMBUF 256
-#define WORDS MEMBUF 
+//#define MEMBUF 256
+//#define WORDS MEMBUF 
+#define WORDS 256 
 
 // do not edit
 // grid side size 
@@ -101,7 +104,7 @@ PATMOS_REGISTER HYPERPERIOD_REGISTER;
 typedef struct Core
 {
   // each core's local memory use a particular row (the owner core) of alltxmem and allrxmem
-  // txmem is an unsigned long array of [CORES-1][MEMBUF]
+  // txmem is an unsigned int array of [CORES-1][MEMBUF]
   //   txmem sends to each of the other cores (therefore it is [CORES-1])
   //   since txmem is [CORES-1], there is a mapping going on in txmem
   //   this mapping means that the sender core's id is skipped in the index
@@ -223,11 +226,9 @@ void showmappings();
 extern volatile _SPM int *alltxmem;
 extern volatile _SPM int *allrxmem;
 #else
-extern int alltxmem[CORES][CORES - 1][MEMBUF];
-extern int allrxmem[CORES][CORES - 1][MEMBUF];
+extern int alltxmem[CORES][CORES - 1][WORDS];
+extern int allrxmem[CORES][CORES - 1][WORDS];
 #endif
 
 //unsigned int rdtsc();
-
-
 #endif

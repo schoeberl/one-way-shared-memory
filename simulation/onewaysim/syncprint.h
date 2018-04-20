@@ -1,3 +1,4 @@
+//syncprint.h
 #ifndef SYNCPRINT_H
 #define SYNCPRINT_H
 #include <math.h>
@@ -36,4 +37,3 @@ void sync_print_core(int id);
 // get cycles (patmos) or time (pc)
 int getcycles();
 #endif
-

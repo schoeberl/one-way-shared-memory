@@ -75,6 +75,7 @@ void nocmeminit()
     for (int j = 0; j < TDMSLOTS; j++)
     { 
       //core[i].txmem[j] will point to a row of WORDS words 
+      // SPM will point to core local memory. Not the same as on the PC
       core[i].tx[j] = (volatile _IODEV int *) (ONEWAY_BASE + j*WORDS);
       core[i].rx[j] = (volatile _IODEV int *) (ONEWAY_BASE + j*WORDS);
     }

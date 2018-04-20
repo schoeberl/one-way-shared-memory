@@ -1,3 +1,4 @@
+//syncprint.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -164,7 +165,3 @@ void sync_print_core(int id)
     }
   }
 }
-
-
-
-
