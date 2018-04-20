@@ -28,22 +28,6 @@ static int mi[PRINTCORES];
 static volatile _UNCACHED int printtoken = -1;
 static volatile _UNCACHED bool firsttime = true;
 
-// used for synchronizing printf from the different cores
-int getcycles()
-{
-#ifdef RUNONPATMOS
-  volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; 
-  return (unsigned int)*io_ptr;
-#else
-  clock_t now_t;
-  now_t = clock();
-  return (int)now_t;
-  //unsigned long a, d;
-  //__asm__ volatile ("rdtsc" : "=a" (a), "=d" (d));
-  //return (int)a;
-#endif
-}
-
 // call it with the core id so there are no race conditions
 void sync_printf(int cid, const char *format, ...)
 {
@@ -65,8 +49,6 @@ void sync_printf(int cid, const char *format, ...)
   }
   printtoken = -1;
 }
-
-
 
 // print minimum timestamp. go over the [core][msg] matrix and find the lowest timestamp
 // then print that message. keep a current msg index for each counter. increase it

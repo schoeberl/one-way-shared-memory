@@ -230,5 +230,8 @@ extern int alltxmem[CORES][CORES - 1][WORDS];
 extern int allrxmem[CORES][CORES - 1][WORDS];
 #endif
 
+// get cycles (patmos) or time (pc)
+int getcycles();
+
 //unsigned int rdtsc();
 #endif

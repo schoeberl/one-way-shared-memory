@@ -34,6 +34,5 @@ void sync_printf(int, const char *format, ...);
 void sync_printall();
 // Printing just for one core at a time
 void sync_print_core(int id);
-// get cycles (patmos) or time (pc)
-int getcycles();
+
 #endif

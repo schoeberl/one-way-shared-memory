@@ -23,12 +23,12 @@
 #include "syncprint.h"
 
 #ifdef RUNONPATMOS
-#define ONEWAY_BASE ((volatile _IODEV int *) 0xE8000000)
-volatile _SPM int *alltxmem = ONEWAY_BASE;
-volatile _SPM int *allrxmem = ONEWAY_BASE;
+//#define ONEWAY_BASE ((volatile _IODEV int *) 0xE8000000)
+//volatile _SPM int *alltxmem = ONEWAY_BASE;
+//volatile _SPM int *allrxmem = ONEWAY_BASE;
 #else
-int alltxmem[CORES][CORES-1][WORDS];
-int allrxmem[CORES][CORES-1][WORDS];
+int alltxmem[CORES][TDMSLOTS][WORDS];
+int allrxmem[CORES][TDMSLOTS][WORDS];
 #endif
 
 static volatile _UNCACHED int testval = -1;
@@ -48,6 +48,22 @@ void holdandgowork(int cpuid){
       if (coreready[i] == false)
         allcoresready = false;
   }
+}
+
+// used for synchronizing printf from the different cores
+int getcycles()
+{
+#ifdef RUNONPATMOS
+  volatile _IODEV int *io_ptr = (volatile _IODEV int *)0xf0020004; 
+  return (unsigned int)*io_ptr;
+#else
+  clock_t now_t;
+  now_t = clock();
+  return (int)now_t;
+  //unsigned long a, d;
+  //__asm__ volatile ("rdtsc" : "=a" (a), "=d" (d));
+  //return (int)a;
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
