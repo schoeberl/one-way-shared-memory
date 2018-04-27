@@ -103,15 +103,17 @@ void nocstart(void (*corefuncptr)(void *)){
   
   //0. start the other cores
   runcores = true;
-  for(int i = 0; i < CORES; i++) 
+  for(int i = 0; i < CORES; i++){ 
     coreready[i] = false;
+    coreid[i] = i;
+  }
 
   // 1. start the slave cores 1..CORES-1
   for (int c = 1; c < CORES; c++)
-    corethread_create(c, corefuncptr, NULL);
+    corethread_create(c, corefuncptr, &coreid[c]);
 
   // 2. "start" ourself (core 0)
-  corefuncptr(NULL);
+  corefuncptr(&coreid[0]);
 }
 
 void nocwaitdone()
@@ -139,6 +141,43 @@ int main(int argc, char *argv[])
   printf("****************************************\n");
   printf("****onewaymem: run usecase on patmos****\n");
   printf("****************************************\n");
+  
+  // thread function pointer which is the use case
+  void (*corefuncptr)(void *);
+  // set a default
+  corefuncptr = &corethreadtbswork;
+
+
+  if ( argc == 2 ) {
+    if (strcmp(argv[1], "U0") == 0)
+    {
+      corefuncptr = &corethreadtbswork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadtbswork");
+    }
+    else if (strcmp(argv[1], "U1") == 0) {
+      corefuncptr = &corethreadhswork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadhswork");
+    }
+    else if (strcmp(argv[1], "U2") == 0) {
+      corefuncptr = &corethreadeswork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadeswork");
+    }
+    else if (strcmp(argv[1], "U3") == 0) {
+      corefuncptr = &corethreadsdbwork;
+      printf("Active use-case %s: %s\n", argv[1], "corethreadsdbwork");
+    }
+    else printf("The unknown argument supplied is %s\n", argv[1]);
+  }
+  else if ( argc > 2 ) {
+    printf("Too many arguments supplied.\n");
+  }
+  else {
+    printf("One argument expected such as \"U1\"\n");
+    //printf("argv[1] is \"%s\"\n", argv[1]);
+    //exit(0);
+  }  
+
+
   printf("Init...\n");
   nocinit();
   printf("Start...\n");
@@ -149,7 +188,7 @@ int main(int argc, char *argv[])
   //void (*corefuncptr)(void *) = &corethreadtbswork;
 
   // use case 2, handshake:       corethreadhswork
-  void (*corefuncptr)(void *) = &corethreadhswork;
+  //void (*corefuncptr)(void *) = &corethreadhswork;
 
   // use case 3, state exchange:  corethreadeswork
   //void (*corefuncptr)(void *) = &corethreadeswork;

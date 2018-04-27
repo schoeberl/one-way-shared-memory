@@ -1,4 +1,4 @@
-MAIN?=onewaymem-patmos_onewaysim
+MAIN?=onewaymem-patmos_onewayuse
 EXTRAFILES = onewaymem-usecases.c syncprint.c
 
 all:
