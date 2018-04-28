@@ -119,7 +119,7 @@ void nocinit(void (*corefuncptr)(void *))
   // do the memory mapping for running the simulator on the PC
   nocmem();
 
-  showmem();
+  //showmem();
 
   // init signals and counters
   HYPERPERIOD_REGISTER = 0;
@@ -186,36 +186,23 @@ int main(int argc, char *argv[])
 
   // thread function pointer which is the use case
   void (*corefuncptr)(void *);
-  // set a default
+  
+#if USECASE==0
+  printf("USECASE = 0\n");
   corefuncptr = &corethreadtbswork;
-
-  if ( argc == 2 ) {
-    if (strcmp(argv[1], "U0") == 0)
-    {
-      corefuncptr = &corethreadtbswork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadtbswork");
-    }
-    else if (strcmp(argv[1], "U1") == 0) {
-      corefuncptr = &corethreadhswork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadhswork");
-    }
-    else if (strcmp(argv[1], "U2") == 0) {
-      corefuncptr = &corethreadeswork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadeswork");
-    }
-    else if (strcmp(argv[1], "U3") == 0) {
-      corefuncptr = &corethreadsdbwork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadsdbwork");
-    }
-    else printf("The unknown argument supplied is %s\n", argv[1]);
-  }
-  else if ( argc > 2 ) {
-    printf("Too many arguments supplied.\n");
-  }
-  else {
-    printf("One argument expected such as \"U1\"\n");
-    printf("argv[1] is \"%s\"\n", argv[1]);
-  }
+#elif USECASE==1
+  printf("USECASE == 1\n");
+  corefuncptr = &corethreadhswork;
+#elif USECASE==2
+  printf("USECASE == 2\n");
+  corefuncptr = &corethreadeswork;
+#elif USECASE==3
+  printf("USECASE == 3\n");
+  corefuncptr = &corethreadsdbwork;        
+#else
+  printf("Unimplemented USECASE value. Exit\n");
+  exit(0);
+#endif
 
 
 
@@ -254,8 +241,8 @@ int main(int argc, char *argv[])
   }
 
   printf("****************************************************************\n");
-  printf("Leaving main...done with highlevel simulation of use-case %s\n", argv[1]);
-  printf("(Remember: Cycles on the PC simulator is *not* cycles on patmos)\n");
+  printf("Leaving main...done with highlevel simulation\n");
+  printf("(Remember: Cycles on the PC simulator is *not* real HW cycles)\n");
   printf("****************************************************************\n");
   return 0;
 }

@@ -141,60 +141,32 @@ int main(int argc, char *argv[])
   printf("****************************************\n");
   printf("****onewaymem: run usecase on patmos****\n");
   printf("****************************************\n");
-  
+
   // thread function pointer which is the use case
   void (*corefuncptr)(void *);
-  // set a default
+  
+#if USECASE==0
+  printf("USECASE = 0\n");
   corefuncptr = &corethreadtbswork;
+#elif USECASE==1
+  printf("USECASE == 1\n");
+  corefuncptr = &corethreadhswork;
+#elif USECASE==2
+  printf("USECASE == 2\n");
+  corefuncptr = &corethreadeswork;
+#elif USECASE==3
+  printf("USECASE == 3\n");
+  corefuncptr = &corethreadsdbwork;        
+#else
+  printf("Unimplemented USECASE value. Exit\n");
+  exit(0);
+#endif
 
-
-  if ( argc == 2 ) {
-    if (strcmp(argv[1], "U0") == 0)
-    {
-      corefuncptr = &corethreadtbswork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadtbswork");
-    }
-    else if (strcmp(argv[1], "U1") == 0) {
-      corefuncptr = &corethreadhswork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadhswork");
-    }
-    else if (strcmp(argv[1], "U2") == 0) {
-      corefuncptr = &corethreadeswork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadeswork");
-    }
-    else if (strcmp(argv[1], "U3") == 0) {
-      corefuncptr = &corethreadsdbwork;
-      printf("Active use-case %s: %s\n", argv[1], "corethreadsdbwork");
-    }
-    else printf("The unknown argument supplied is %s\n", argv[1]);
-  }
-  else if ( argc > 2 ) {
-    printf("Too many arguments supplied.\n");
-  }
-  else {
-    printf("One argument expected such as \"U1\"\n");
-    //printf("argv[1] is \"%s\"\n", argv[1]);
-    //exit(0);
-  }  
 
 
   printf("Init...\n");
   nocinit();
   printf("Start...\n");
-  
-  // Howto: Enable one of the following use cases //
-  
-  // use case 1, time-based sync: corethreadtbswork
-  //void (*corefuncptr)(void *) = &corethreadtbswork;
-
-  // use case 2, handshake:       corethreadhswork
-  //void (*corefuncptr)(void *) = &corethreadhswork;
-
-  // use case 3, state exchange:  corethreadeswork
-  //void (*corefuncptr)(void *) = &corethreadeswork;
-
-  // use case 4: corethreadsdbwork
-  //void (*corefuncptr)(void *) = &corethreadsdbwork;  
   
   nocstart(corefuncptr);
   

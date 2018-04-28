@@ -505,17 +505,20 @@ void corethreadhswork(void *cpuidptr)
         sync_printf(cpuid, "endtime %d - starttime %d = %d cycles\n",
                          endtime, starttime, endtime-starttime); 
         
-        //check use 2
+        //check use case 1 on HW
+        #ifdef RUNONPATMOS
         for(int i=0; i<TDMSLOTS; i++) { 
           int ackok = (hmsg_out[i].blockno == hmsg_ack_in[i].blockno) && 
                       (hmsg_ack_in[i].fromcore == gettxcorefromrxcoreslot(cpuid, i)) &&
                       (hmsg_ack_in[i].tocore == cpuid);
           if(ackok)
-            sync_printf(cpuid, "use case 2 ok (ack from tx core %d ok)!\n", hmsg_ack_in[i].fromcore);
+            sync_printf(cpuid, "use case 1 ok (ack from tx core %d ok)!\n", hmsg_ack_in[i].fromcore);
           else
-            sync_printf(cpuid, "Error: use case 2 not ok (from %d)!\n", hmsg_ack_in[i].fromcore);
+            sync_printf(cpuid, "Error: use case 1 not ok (from %d)!\n", hmsg_ack_in[i].fromcore);
             
         }
+        #endif
+
         //spinwork(TDMSLOTS*WORDS);
 
         // next state    
@@ -627,11 +630,13 @@ void corethreadeswork(void *cpuidptr) {
         }
         
         if(cpuid != 0){
-          // check use case 3
-          if (esmsg_in[cpuid].sensorid == SENSORID0)
-            sync_printf(cpuid, "use case 3 ok (core 0 sensor state to core %d)!\n", cpuid);
-          else
-            sync_printf(cpuid, "use case 3 not ok (core 0 sensor state to core %d)!\n", cpuid);  
+          // check use case 2 when running on real HW
+          #ifdef RUNONPATMOS
+            if (esmsg_in[cpuid].sensorid == SENSORID0)
+              sync_printf(cpuid, "use case 2 ok (core 0 sensor state to core %d)!\n", cpuid);
+            else
+              sync_printf(cpuid, "use case 2 not ok (core 0 sensor state to core %d)!\n", cpuid);  
+          #endif
         }        
           
         spinwork(TDMSLOTS*WORDS);
@@ -662,8 +667,6 @@ void corethreadsdbwork(void *cpuidptr)
 {
   int cpuid = *((int*)cpuidptr);
   sync_printf(cpuid, "Core %d started...DOUBLEBUFFERS=%d, TDMSLOTS=%d, DBUFSIZE=%d, WORDS=%d\n", 
-              cpuid, DOUBLEBUFFERS, TDMSLOTS, DBUFSIZE, WORDS);
- printf("Core %d started...DOUBLEBUFFERS=%d, TDMSLOTS=%d, DBUFSIZE=%d, WORDS=%d\n", 
               cpuid, DOUBLEBUFFERS, TDMSLOTS, DBUFSIZE, WORDS);
   // setup: each tx and rx tdm slot have two (or more) double buffers
   // each buffer_t represents one (of at least two) for each TDM slot (each 
@@ -823,9 +826,9 @@ void corethreadsdbwork(void *cpuidptr)
 
           // check rough timing
           if(totalcycles < 1e6)
-            sync_printf(cpuid, "use case 4 ok!\n", cpuid);
+            sync_printf(cpuid, "use case 3 ok!\n", cpuid);
           else
-            sync_printf(cpuid, "use case 4 not ok!\n", cpuid);
+            sync_printf(cpuid, "use case 3 not ok!\n", cpuid);
             
         } else {
           sync_printf(cpuid, "core %d have no rx work in state 1\n", cpuid);
