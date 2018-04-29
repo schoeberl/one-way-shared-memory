@@ -30,40 +30,6 @@
 // NoC setup
 // See:https://github.com/schoeberl/one-way-shared-memory/blob/master/src/main/scala/oneway/Network.scala
 
-// One-way-memory NoC configuration:
-//   CORES is defined from the NoC configuration (2x2, 3x3, etc.). It is derived 
-//   from the speciffic configuration such as FOURNODES_N. 
-//   Each core has one set (at least) of TX and RX TDM slots for communicating 
-//   (i.e., sending and receiving one word/flit to/from each of the other cores) 
-//   with the other cores.  
-//   Additionally, each core has a number of buffers (MEMBUF) such that a 
-//   message of several words/flits is transmitted in what is called
-//   a TDMROUND.
-//
-//   Example TX setup for one core in a 2x2 NoC configuration:
-//   CORES = 4, also called CNT
-//   MEMBUF = 4 (up to 256), also called WORDS
-//                                   HYPERPERIOD 
-//   Dou. buf. ex.: |DOUBLEBUFFER[0]              |DOUBLEBUFFER[1]   ...                  
-//                   MEMBUF[0] MEMBUF[1] MEMBUF[2] MEMBUF[3] ... WORDS - 1  
-//                  +---------+---------+---------+---------+---
-//                  |TX slot 0|TX slot 0|TX slot 0|TX slot 0|
-//   TDMROUND:      +---------+---------+---------+---------+---
-//     TDM slots    |TX slot 1|TX slot 1|TX slot 1|TX slot 1|
-//     CORES -1     +---------+---------+---------+---------+---
-//                  |TX slot 2|TX slot 2|TX slot 2|TX slot 2|
-//                  +---------+---------+---------+---------+---
-//   
-//   The routing in the one-way-mem NoC grid is defined by FOURNODES (for a 2x2 grid).
-//   The NoC starts with the transmission of the word in TX slot 0 for MEMBUF[0] for
-//   each core in parallel. The route for this very first word is the first line in 
-//   FOURNODES; "nel". Two clock cycles later, the word in TX slot 1 (still MEMBUF[0])
-//   is transmitted on the route "  nl". After transmitting TX slot 2 (one clock
-//   cycle after transmitting TX slot 1), the second TDMROUND starts. This happens
-//   one clock cycle after and hee TX slot 0 is transmitted from MEMBUF[1]. When
-//   TX slot 2 is transmitted from MEMBUF[3], the TDMROUND is finished (and a new one 
-//   starts). 
-
 #define FOURNODES "nel|"\
                   "  nl|"\
                   "   el|"
@@ -82,18 +48,10 @@
 // one core configuration
 #define TDMSLOTS (CORES - 1)
 
-// global memory
-// a slot for loop-back testing included
-//extern unsigned long alltxmem[CORES][CORES - 1][MEMBUF]; 
-//extern unsigned long allrxmem[CORES][CORES - 1][MEMBUF];
-
 // patmos hardware registers provided via Scala HDL
 volatile _UNCACHED bool runcores;
 volatile _UNCACHED bool coreready[CORES];
 typedef volatile _UNCACHED unsigned int PATMOS_REGISTER;
-
-// defined patmos hardware registers (simulated)
-// we do not have one for the SLOT counter in the simulator
 
 // one word delivered from all to all
 PATMOS_REGISTER TDMROUND_REGISTER;

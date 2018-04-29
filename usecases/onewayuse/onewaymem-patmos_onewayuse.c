@@ -162,8 +162,6 @@ int main(int argc, char *argv[])
   exit(0);
 #endif
 
-
-
   printf("Init...\n");
   nocinit();
   printf("Start...\n");
@@ -186,8 +184,3 @@ int main(int argc, char *argv[])
   
   return 0;
 }
-
-///////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////
-
-

@@ -97,9 +97,9 @@ void nocmem() {
       core[i].tx[j] = alltxmem[i][j];
       core[i].rx[j] = allrxmem[i][j];
       for (int m = 0; m < WORDS; m++) {
-        // zero out the tx and rx membuffer slots
-        core[i].tx[j][m] = 0;
-        core[i].rx[j][m] = 0;
+        // init the tx and rx membuffer slots to known vals
+        core[i].tx[j][m] = 0x10000*i + 0x1000*j+m;
+        core[i].rx[j][m] = 0x10000*i + 0x1000*j+m;
       }
     }
   }
@@ -161,22 +161,6 @@ void nocdone()
 //Simulator main
 ///////////////////////////////////////////////////////////////////////////////
 
-/* define this somewhere */
-//#ifdef __i386
-//__inline__ uint64_t rdtsc() {
-//  uint64_t x;
-//  __asm__ volatile ("rdtsc" : "=A" (x));
-//  return x;
-//}
-//#elif __amd64
-//unsigned int rdtsc() {
-//  unsigned long a, d;
-//  __asm__ volatile ("rdtsc" : "=a" (a), "=d" (d));
-//return (d<<32) | a;
-//  return (unsigned int) a;
-//}
-//#endif
-
 // we are core 0
 int main(int argc, char *argv[])
 {
@@ -204,26 +188,7 @@ int main(int argc, char *argv[])
   exit(0);
 #endif
 
-
-
-
-
-  //start the other cores
   runcores = true;
-
-  // Use case 1
-  //void (*corefuncptr)(void *) = &corethreadtbswork;
-  //corethreadtbswork(&coreid[0]);
-
-  // use case 2, handshake:       corethreadhswork
-  // void (*corefuncptr)(void *) =corethreadhswork;
-
-  // use case 3, state exchange:  corethreadeswork
-  //void (*corefuncptr)(void *) = &corethreadeswork;
-
-  // use case 4: corethreadsdbwork
-  //void (*corefuncptr)(void *) = &corethreadsdbwork;
-  // core 0 is done, wait for the others
 
   // start the slave threads
   nocinit(corefuncptr);

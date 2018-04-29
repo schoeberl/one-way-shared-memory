@@ -13,7 +13,6 @@
 #endif
 #include "syncprint.h"
 
-
 //print support so the threads on all cores can use printf
 //  call sync_printall to print them after the most
 //  important code has run.
@@ -42,8 +41,6 @@ void sync_printf(int cid, const char *format, ...)
     va_list args;
     va_start(args, format);
     vsprintf(&strings[cid][mi[cid]][0], format, args);
- //printf(format, args);
-    //printf("cid %d: %s\n", cid, strings[cid][mi[cid]]);
     va_end(args);
     mi[cid]++;
   }
@@ -98,7 +95,6 @@ void sync_printall()
 
   //printf("leaving sync_printall()...\n");
 }
-
 
 // print for one core
 // infocore is id = PRINTCORES (same as CORES + 1)

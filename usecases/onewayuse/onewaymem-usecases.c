@@ -209,15 +209,6 @@ void corethreadtbswork(void *cpuidptr) {
         
       case 1: {
         // state work
-        //sync_printf(cpuid, "core %d rx state 1\n", cpuid);        
-        //rxwork(cpuid);
-        
-        
-        //for(int i = 0; i < TDMSLOTS; i++)
-         // hyperperiodptr[i] = &core[cpuid].rx[i][0];
-        //recordhyperperiodwork(&prevhyperperiod[0]);
-        
-        //spinwork(TDMSLOTS*WORDS);
         // next state    
         if (true) { 
           state++;
@@ -260,7 +251,7 @@ void corethreadtbswork(void *cpuidptr) {
               //stopcycle[i] = getcycles();
               if((!trigger[i]) && core[0].rx[i][0] != prevhyperperiod[i]){
                 // use case 1 tbs trigger
-                stopcycle[i] = getcycles();
+                //stopcycle[i] = getcycles();
                 trigger[i] = true;
                 //tbstriggerwork(gettxcorefromrxcoreslot(cpuid, i));
               }
@@ -270,6 +261,11 @@ void corethreadtbswork(void *cpuidptr) {
               }
             }    
           }
+
+          // timer after while
+          for(int i = 0; i < TDMSLOTS; i++)
+            stopcycle[i] = getcycles();
+          
           
           for(int i = 0; i < TDMSLOTS; i++)
             sync_printf(cpuid, "core %d(%d) (stopcycle=%d) - (startcycle=%d) = %d\n", 
