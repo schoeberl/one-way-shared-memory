@@ -2,7 +2,7 @@
 
 ## Abstract
 
-The number of cores (CORES) is defined from the NoC configuration (2x2, 3x3, etc.). It is derived from the speciffic configuration such as FOURNODES_N. Each core has one set (at least) of TX and RX TDM slots for communicating (i.e., sending and receiving one word/flit to/from each of the other cores) 
+The number of cores (CORES) is defined from the NoC configuration (2x2, 3x3, etc.). It is derived from the specific configuration such as FOURNODES_N. Each core has one set (at least) of TX and RX TDM slots for communicating (i.e., sending and receiving one word/flit to/from each of the other cores) 
 with the other cores. Additionally, each core has a number of buffers (MEMBUF) such that a 
 message of several words/flits is transmitted in what is called a TDMROUND.
 
@@ -22,13 +22,13 @@ MEMBUF = 4 (up to 256), also called WORDS
                   +---------+---------+---------+---------+---
 ```
 
-The routing in the one-way-mem NoC grid is defined by FOURNODES (for a 2x2 grid). The NoC starts with the transmission of the word in TX slot 0 for MEMBUF[0] for each core in parallel. The route for this very first word is the first line in FOURNODES; "nel". Two clock cycles later, the word in TX slot 1 (still MEMBUF[0])
+The routing in the one-way memory NoC grid is defined by FOURNODES (for a 2x2 grid). The NoC starts with the transmission of the word in TX slot 0 for MEMBUF[0] for each core in parallel. The route for this very first word is the first line in FOURNODES; "nel". Two clock cycles later, the word in TX slot 1 (still MEMBUF[0])
 is transmitted on the route "  nl". After transmitting TX slot 2 (one clock cycle after transmitting TX slot 1), the second TDMROUND starts. This happens one clock cycle after and hee TX slot 0 is transmitted from MEMBUF[1]. When
 TX slot 2 is transmitted from MEMBUF[3], the TDMROUND is finished (and a new one starts). 
 
 ## Source code and Use-cases
 
-The source code is split in three parts. One part that runs only on the PC (the simulator), one part that runs only on patmos (setting up the usecases for execution), and a common part (the actual usecases and some utilities). The files used for simulation or running the code on a HW platform are listed below. 
+The source code is split in three parts. One part that runs only on the PC (the simulator), one part that runs only on Patmos (setting up the usecases for execution), and a common part (the actual usecases and some utilities). The files used for simulation or running the code on a HW platform are listed below. 
 
 There are four use-cases at this point. They are as follows:
 * 0: Time-based synchronization use-case
@@ -44,7 +44,7 @@ In the make script below, each use-case is identified by the identifier 0, 1, 2,
 
 Files in use: onemem-simulator.c, onewaymem-usecases.c, onewaysim.h, syncprint.c, and syncprint.h.
 
-`RUNONPATMOS` is defined in onewaysim.h and determines if the code shall run on patmos or not. It is automatically set by the build system when running on patmos:
+`RUNONPATMOS` is defined in onewaysim.h and determines if the code shall run on patmos or not. It is automatically set by the build system when running on Patmos:
 ```
 #ifdef __patmos__
   #define RUNONPATMOS
@@ -53,7 +53,7 @@ Files in use: onemem-simulator.c, onewaymem-usecases.c, onewaysim.h, syncprint.c
 
 The `doit` target is for PC-based simulation. `RUNONPATMOS` must not be defined.
 
-A speciffic use-case is run by supplying the use-case identifier to the respective make target. The following would execute use-case 0 on the PC:
+A specific use-case is run by supplying the use-case identifier to the respective make target. The following would execute use-case 0 on the PC:
 
 ```
 make usecase=0 doit
