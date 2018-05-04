@@ -173,14 +173,17 @@ int main(int argc, char *argv[])
   
 #if USECASE==0
   printf("USECASE = 0\n");
-  corefuncptr = &corethreadtbswork;
+  corefuncptr = &corethreadtestwork;
 #elif USECASE==1
   printf("USECASE == 1\n");
   corefuncptr = &corethreadhswork;
 #elif USECASE==2
+  printf("USECASE == 1\n");
+  corefuncptr = &corethreadhswork;
+#elif USECASE==3
   printf("USECASE == 2\n");
   corefuncptr = &corethreadeswork;
-#elif USECASE==3
+#elif USECASE==4
   printf("USECASE == 3\n");
   corefuncptr = &corethreadsdbwork;        
 #else
@@ -207,7 +210,7 @@ int main(int argc, char *argv[])
 
   printf("****************************************************************\n");
   printf("Leaving main...done with highlevel simulation\n");
-  printf("(Remember: Cycles on the PC simulator is *not* real HW cycles)\n");
+  printf("(Remember: Cycles on the PC simulator are *not* real HW cycles)\n");
   printf("****************************************************************\n");
   return 0;
 }

@@ -25,6 +25,7 @@
   #define _IODEV
   #define _UNCACHED
   #include <pthread.h>
+  #include <sched.h>
 #endif
 
 // NoC setup
@@ -153,6 +154,8 @@ void nocwaitdone();
 void simcontrol();
 #endif
 
+// test case function declarations
+void corethreadtestwork(void *cidptr);
 void corethreadtbswork(void *cidptr);
 void corethreadhswork(void *noarg);
 void corethreadeswork(void *noarg);
@@ -168,7 +171,6 @@ void txrxmapsinit();
 int getrxcorefromtxcoreslot(int txcore, int txslot);
 // get the tx core based on tx core and rx (TDM) slot index
 int gettxcorefromrxcoreslot(int rxcore, int rxslot);
-
 
 #ifndef RUNONPATMOS
   extern pthread_t cpu_id_tid[CORES];

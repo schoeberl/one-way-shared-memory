@@ -23,12 +23,12 @@ MEMBUF = 4 (up to 256), also called WORDS
 ```
 
 The routing in the one-way memory NoC grid is defined by FOURNODES (for a 2x2 grid). The NoC starts with the transmission of the word in TX slot 0 for MEMBUF[0] for each core in parallel. The route for this very first word is the first line in FOURNODES; "nel". Two clock cycles later, the word in TX slot 1 (still MEMBUF[0])
-is transmitted on the route "  nl". After transmitting TX slot 2 (one clock cycle after transmitting TX slot 1), the second TDMROUND starts. This happens one clock cycle after and hee TX slot 0 is transmitted from MEMBUF[1]. When
+is transmitted on the route "  nl". After transmitting TX slot 2 (one clock cycle after transmitting TX slot 1), the second TDMROUND starts. This happens one clock cycle after and the TX slot 0 is transmitted from MEMBUF[1]. When
 TX slot 2 is transmitted from MEMBUF[3], the TDMROUND is finished (and a new one starts). 
 
 ## Source code and Use-cases
 
-The source code is split in three parts. One part that runs only on the PC (the simulator), one part that runs only on Patmos (setting up the usecases for execution), and a common part (the actual usecases and some utilities). The files used for simulation or running the code on a HW platform are listed below. 
+The source code is split in three parts. One part that runs only on the PC (the simulator), one part that runs only on Patmos (setting up the use-cases for execution), and a common part (the actual use-cases and some utilities). The files used for simulation or running the code on a HW platform are listed below. 
 
 There are four use-cases at this point. They are as follows:
 * 0: Time-based synchronization use-case
@@ -38,13 +38,13 @@ There are four use-cases at this point. They are as follows:
 
 ## Simulating on PC
 
-The code in the `onewayuse` directory can do two things. First, it can simulate multicore usecases on the PC. Second, it can use patmos to run the same usecases directy on hardware. 
+The code in the `onewayuse` directory can do two things. First, it can simulate multicore use-cases on the PC. Second, it can use Patmos to run the same use-cases directly on hardware. 
 
 In the make script below, each use-case is identified by the identifier 0, 1, 2, or 3.
 
 Files in use: onemem-simulator.c, onewaymem-usecases.c, onewaysim.h, syncprint.c, and syncprint.h.
 
-`RUNONPATMOS` is defined in onewaysim.h and determines if the code shall run on patmos or not. It is automatically set by the build system when running on Patmos:
+`RUNONPATMOS` is defined in onewaysim.h and determines if the code shall run on Patmos or not. It is automatically set by the build system when running on Patmos:
 ```
 #ifdef __patmos__
   #define RUNONPATMOS
@@ -63,7 +63,7 @@ make usecase=0 doit
 
 Files in use: onemem-patmos_onewayuse.c, onewaymem-usecases.c, onewaysim.h, syncprint.c, syncprint.h
 
-The `onpatmos` target is for running code directly on patmos. The following would execute use-case 1 on patmos HW:
+The `onpatmos` target is for running code directly on Patmos. The following would execute use-case 1 on Patmos HW:
 
 ```
 make usecase=1 onpatmos

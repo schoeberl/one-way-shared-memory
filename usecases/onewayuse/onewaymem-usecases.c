@@ -67,6 +67,175 @@ int getcycles()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+//CORE TEST USECASE 0: Sanity check of the NoC itself
+///////////////////////////////////////////////////////////////////////////////
+
+// This use-case check that the all-to-all delivery works.
+// It checks if the HW NoC (and the simulated NoC) works and if the SW works
+// (i.e., it can detect the all-to-all schedule for different route schedules and 
+// different NoC configurations, 2x2, 3x3, ...) 
+void corethreadtestwork(void *cpuidptr) {
+  // TODO: replace with sanity test use-case
+  int state = 0;
+  int cpuid = *((int*) cpuidptr);
+  printf("---in corethreadtbs(%d)...\n", cpuid);
+  sync_printf(cpuid, "in corethreadtbs(%d)...\n", cpuid);
+  unsigned int tdmround[TDMSLOTS];
+  // previous hyperperiod (used to detect/poll for new hyperperiod)
+  unsigned int prevhyperperiod[TDMSLOTS];
+  // point to first word in each TDM message
+  volatile _SPM int* hyperperiodptr[TDMSLOTS];
+  
+  for(int i = 0; i < TDMSLOTS; i++)
+    hyperperiodptr[i] = &core[cpuid].rx[i][0];
+  
+  holdandgowork(cpuid);
+  sync_printf(cpuid, "core %d mission start on cycle %d\n", cpuid, getcycles());
+
+  // test harness stuff
+  // instruction: comment out sync_printf in the measured section/path etc.
+  // use getcycles() to record startcycle and then stopcycle
+  // sync_print them after the measurement
+  int startcycle;
+  int stopcycle[TDMSLOTS];
+
+  while (runcores) {
+    #ifndef RUNONPATMOS
+        sched_yield();
+    #endif
+    // overall "noc state" handled by poor core 0 as a sidejob 
+    static int roundstate = 0;
+    // the statemachine will reach this state below
+    const int MAXROUNDSTATE = 1;
+    if (cpuid == 0){
+      #ifndef RUNONPATMOS
+        simcontrol();
+      #endif
+      if(roundstate == MAXROUNDSTATE) {
+        // signal to stop the slave cores
+        runcores = false; 
+        sync_printf(0, "core 0 is done, roundstate == false signalled\n");
+      }  
+      roundstate++;
+    }
+      
+    // individual core states incl 0
+    switch (state) {
+      case 0: {
+        // state work
+        sync_printf(cpuid, "core %d tx state 0\n", cpuid);
+        //txwork(cpuid);
+        for(int i = 0; i < TDMSLOTS; i++)
+            prevhyperperiod[i] = core[cpuid].rx[i][0];
+
+        //recordhyperperiodwork(&prevhyperperiod[0]);
+        //spinwork(TDMSLOTS*WORDS);
+
+        // next state
+        if (true) {
+          state++;
+        }
+        
+        if(cpuid == 0)
+          state = 3;
+        else 
+          state = 2;
+        sync_printf(cpuid, "core %d tx state 0, new state=%d\n", cpuid, state);
+        
+        break;
+      }
+        
+      case 1: {
+        // state work
+        // next state    
+        if (true) { 
+          state++;
+        }
+        
+        if(cpuid == 0)
+          state = 3;
+
+        break;
+      }
+        
+      case 2: {
+        // state work
+        if(cpuid != 0)
+          sync_printf(cpuid, "core %d tx state 2\n", cpuid);        
+          //txwork(cpuid);
+        
+        //spinwork(TDMSLOTS*WORDS);
+        //next state
+        if (true) {
+          state++;
+        }
+        
+
+        break;
+      }
+      
+      case 3: {
+        // state work
+        startcycle = getcycles();
+        sync_printf(cpuid, "core %d rx state 3\n", cpuid);  
+        bool nextstatetbstrigger = true;//false;
+        
+        bool trigger[TDMSLOTS] = {false};
+        
+        if(cpuid == 0) {
+          while(!nextstatetbstrigger) {
+            nextstatetbstrigger = true;
+            for(int i = 0; i < TDMSLOTS; i++){
+              //stopcycle[i] = getcycles();
+              if((!trigger[i]) && core[0].rx[i][0] != prevhyperperiod[i]){
+                // use case 1 tbs trigger
+                //stopcycle[i] = getcycles();
+                trigger[i] = true;
+                //tbstriggerwork(gettxcorefromrxcoreslot(cpuid, i));
+              }
+              else {
+                //stopcycle[i] = getcycles(); //...
+                nextstatetbstrigger = false;              
+              }
+            }    
+          }
+
+          // timer after while
+          for(int i = 0; i < TDMSLOTS; i++)
+            stopcycle[i] = getcycles();
+          
+          
+          for(int i = 0; i < TDMSLOTS; i++)
+            sync_printf(cpuid, "core %d(%d) (stopcycle=%d) - (startcycle=%d) = %d\n", 
+                   cpuid, gettxcorefromrxcoreslot(cpuid, i), stopcycle[i], 
+                   startcycle, (stopcycle[i]-startcycle));
+    
+          //rxwork(cpuid);
+          //recordhyperperiodwork(cpuid, &prevhyperperiod[0]);
+          spinwork(TDMSLOTS*WORDS);
+        } else {
+          // for the slave tx cores
+          nextstatetbstrigger = true;  
+        }
+        
+        sync_printf(cpuid, "core %d rx state 3 done\n", cpuid);  
+        // next state    
+        if (nextstatetbstrigger) { 
+          state++;
+        }
+        break;  
+      }      
+      default: {
+          // no work, just "looping" until runcores == false is signaled from core 0
+          break;
+      }
+    }
+  
+  }
+  sync_printf(cpuid, "leaving coretestwork(%d)...\n", cpuid);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 //COMMUNICATION PATTERN: Time-Based Synchronization (tbs)
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -165,6 +334,9 @@ void corethreadtbswork(void *cpuidptr) {
   int stopcycle[TDMSLOTS];
 
   while (runcores) {
+    #ifndef RUNONPATMOS
+        sched_yield();
+    #endif
     // overall "noc state" handled by poor core 0 as a sidejob 
     static int roundstate = 0;
     // the statemachine will reach this state below
@@ -271,8 +443,7 @@ void corethreadtbswork(void *cpuidptr) {
             sync_printf(cpuid, "core %d(%d) (stopcycle=%d) - (startcycle=%d) = %d\n", 
                    cpuid, gettxcorefromrxcoreslot(cpuid, i), stopcycle[i], 
                    startcycle, (stopcycle[i]-startcycle));
-
-          
+    
           rxwork(cpuid);
           recordhyperperiodwork(cpuid, &prevhyperperiod[0]);
           spinwork(TDMSLOTS*WORDS);
