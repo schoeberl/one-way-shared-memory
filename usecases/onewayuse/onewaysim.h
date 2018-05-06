@@ -153,6 +153,9 @@ void nocwaitdone();
 #ifndef RUNONPATMOS
 void simcontrol();
 #endif
+void precoreloopwork(int loopcnt);
+
+int getcpuidfromptr(void *acpuidptr);
 
 // test case function declarations
 void corethreadtestwork(void *cidptr);
@@ -161,12 +164,38 @@ void corethreadhswork(void *noarg);
 void corethreadeswork(void *noarg);
 void corethreadsdbwork(void *noarg);
 
+typedef struct State {
+  // the core id
+  int cpuid;
+  // states...
+  int state;
+  // loop counter for control loop
+  int loopcount;
+  // when the core is running (not in the final waiting state)
+  bool corerunning;
+  // when the core is just spinning in the last waiting state
+  bool coredone;
+  // flags for different use in use cases
+  bool flags[255];
+  // values for different use in different use-cases
+  int  vals[255];
+  // the global flag (mirroed locally)
+  bool runcores;
+} State;
+
+#ifndef RUNONPATMOS
+  State states[CORES];
+#endif
+
 void playandtest();
 
 // uses the router string (e.g., "nel, nl, el", ...)
 // to generate the mappings that rxcorefromtxcoreslot and 
 // txcorefromrxcoreslot use.
 void txrxmapsinit();
+
+// get rx slot from rxcore, txcore, and txslot
+int getrxslotfromrxcoretxcoreslot(int rxcore, int txcore, int txslot);
 // get the rx core based on tx core and tx (TDM) slot index
 int getrxcorefromtxcoreslot(int txcore, int txslot);
 // get the tx core based on tx core and rx (TDM) slot index
