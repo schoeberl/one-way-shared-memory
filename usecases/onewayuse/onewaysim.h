@@ -194,6 +194,8 @@ void playandtest();
 // txcorefromrxcoreslot use.
 void txrxmapsinit();
 
+// get tx slot from txcore, rxcore, and rxslot
+int gettxslotfromtxcorerxcoreslot(int txcore, int rxcore, int rxslot);
 // get rx slot from rxcore, txcore, and txslot
 int getrxslotfromrxcoretxcoreslot(int rxcore, int txcore, int txslot);
 // get the rx core based on tx core and tx (TDM) slot index

@@ -28,14 +28,18 @@ void showmem() {
   for (int coreid = 0; coreid < CORES; coreid++) {
     printf("Core %d\n", coreid);
     for (int slot = 0; slot < TDMSLOTS; slot++) {
-      printf("  tx slot %d (to core %d)\n    ", slot, getrxcorefromtxcoreslot(coreid, slot));
+      printf("  tx slot %d (to rx core %d, rx slot %d)\n    ", slot, 
+             getrxcorefromtxcoreslot(coreid, slot),
+             getrxslotfromrxcoretxcoreslot(getrxcorefromtxcoreslot(coreid, slot), coreid, slot));
       for (int w = 0; w < WORDS; w++) {
         printf("0x%08x ", alltxmem[coreid][slot][w]);
         if ((w + 1) % 8 == 0)
           printf("\n    ");
       }
       printf("\n");
-      printf("  rx slot %d (from core %d)\n    ", slot, gettxcorefromrxcoreslot(coreid, slot));
+      printf("  rx slot %d (from tx core %d, tx slot %d)\n    ", slot, 
+             gettxcorefromrxcoreslot(coreid, slot),
+             gettxslotfromtxcorerxcoreslot(gettxcorefromrxcoreslot(coreid, slot), coreid, slot));
       for (int w = 0; w < WORDS; w++) {
         printf("0x%08x ", allrxmem[coreid][slot][w]);
         if ((w + 1) % 8 == 0)
@@ -134,15 +138,11 @@ void noccontrol(void (*corefuncptr)(void *))
     for (int c = 0; c < CORES; c++)
       corefuncptr(&coreid[c]);
 
-    printf("showmem::\n");
-    showmem();
-
     for (int w = 0; w < WORDS; w++)
       simcontrol(w);
 
-    printf("showmem::\n");
-    showmem();
-exit(0);
+    //showmem();
+
     /*
     wordindex++;
     if(wordindex == WORDS)

@@ -31,7 +31,7 @@ static volatile _UNCACHED bool firsttime = true;
 void sync_printf(int cid, const char *format, ...)
 {
   //uncomment next line to run with shared mutex
-  while(printtoken != -1){};
+  //while(printtoken != -1){};
   
   printtoken = cid;
   if (mi[cid] < SYNCPRINTBUF)

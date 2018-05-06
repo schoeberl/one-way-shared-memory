@@ -10,7 +10,7 @@ help:
 doit: 
 	@if test -z "$(usecase)"; then echo "usecase not defined; see README.md"; exit 1; fi
 	rm -f ./a.out
-	cd onewayuse && $(CC) -I$(PATMOSHOME)/../newlib/newlib/libc/machine/patmos -pthread -g $(HOSTSOURCEFILES) -D USECASE=$(usecase)
+	cd onewayuse && $(CC) -I$(PATMOSHOME)/../newlib/newlib/libc/machine/patmos -pthread -g $(HOSTSOURCEFILES) onewaymem-usecase$(usecase).c -D USECASE=$(usecase)
 	cd onewayuse && ./a.out
 
 #use this target if there is a segmentation fault from your code in the 'doit' target
