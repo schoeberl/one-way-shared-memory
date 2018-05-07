@@ -12,7 +12,7 @@
 int alltxmem[CORES][TDMSLOTS][WORDS];
 int allrxmem[CORES][TDMSLOTS][WORDS];
 
-pthread_t *threadHandles;
+//pthread_t *threadHandles;
 
 void showmem() {
   printf("showmem():\n");
@@ -97,7 +97,7 @@ void nocinit(void (*corefuncptr)(void *))
   }
 
   // not using 0
-  threadHandles = calloc(CORES, sizeof(pthread_t));
+  //  threadHandles = calloc(CORES, sizeof(pthread_t));
 
   // do the memory mapping for running the simulator on the PC
   nocmem();
@@ -128,23 +128,15 @@ void noccontrol(void (*corefuncptr)(void *))
 {
   //sync_printf(0, "in noccontrol: simulation control when just running on host PC\n");
 
-  int wordindex = 0;
   while (states[0].runcores){
-    for (int c = 0; c < CORES; c++)
-      corefuncptr(&coreid[c]);
-
+    for (int c = 0; c < CORES; c++){
+      corefuncptr(&c);
+    }
 
     // route like the NoC
     for (int w = 0; w < WORDS; w++)
       simcontrol(w);
-    
-    //showmem();
 
-    /*
-    wordindex++;
-    if(wordindex == WORDS)
-      wordindex = 0;
-    */
   }
 }
 
@@ -183,13 +175,13 @@ int main(int argc, char *argv[])
   printf("USECASE == 1\n");
   corefuncptr = &corethreadtbswork;
 #elif USECASE==2
-  printf("USECASE == 1\n");
+  printf("USECASE == 2\n");
   corefuncptr = &corethreadhswork;
 #elif USECASE==3
-  printf("USECASE == 2\n");
+  printf("USECASE == 3\n");
   corefuncptr = &corethreadeswork;
 #elif USECASE==4
-  printf("USECASE == 3\n");
+  printf("USECASE == 4\n");
   corefuncptr = &corethreadsdbwork;
 #else
   printf("Unimplemented USECASE value. Exit\n");

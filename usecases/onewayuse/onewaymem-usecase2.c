@@ -22,8 +22,6 @@ void corethreadhswork(void *cpuidptr) {
   //   if you forget then print statements add about 1e6 cycles to the result!
   int printon = 1;
   int cpuid = *((int*)cpuidptr);
-  sync_printf(cpuid, "in corethreadhsp(%d)...\n", cpuid);
-
   State *state;
   #ifdef RUNONPATMOS
   State statevar;
@@ -33,13 +31,17 @@ void corethreadhswork(void *cpuidptr) {
   state = &states[cpuid];
   #endif
 
+  if (state->loopcount == 0) 
+    sync_printf(cpuid, "in corethreadhsp(%d)...\n", cpuid);
+
   switch (state->state) {
       // tx messages
     case 0: {
       // state work
       sync_printf(cpuid, "core %d tx state 0\n", cpuid);
       state->starttime = getcycles();
-      state->blockno = 0xCAFE;
+      state->blockno = 0xCAFE1234;
+      state->txcnt = 1;
       // prepare the handshaked messages
       for(int i=0; i < TDMSLOTS; i++){ 
         // txstamp in first word
@@ -138,7 +140,7 @@ void corethreadhswork(void *cpuidptr) {
           core[cpuid].tx[i][2] = state->hmsg_ack_out[i].tocore;
           core[cpuid].tx[i][3] = state->hmsg_ack_out[i].blockno;
 
-          if(printon) sync_printf(cpuid, "hmsg_ack[%d] ack (blockno %d) sent to core %d\n",
+          if(printon) sync_printf(cpuid, "hmsg_ack[%d] ack (blockno 0x%08x) sent to core %d\n",
             i, state->hmsg_ack_out[i].blockno, state->hmsg_ack_out[i].tocore);
         }
       }       
@@ -183,9 +185,9 @@ void corethreadhswork(void *cpuidptr) {
         allackok = allackok && ackok;
           
         if(ackok)
-          sync_printf(cpuid, "use case 1 ok (ack from tx core %d ok)!\n", state->hmsg_ack_in[i].fromcore);
+          sync_printf(cpuid, "use case ok (ack from tx core %d ok)!\n", state->hmsg_ack_in[i].fromcore);
         else
-          sync_printf(cpuid, "Error: use case 1 not ok (from %d)!\n", state->hmsg_ack_in[i].fromcore);
+          sync_printf(cpuid, "error: use case not ok (from %d)!\n", state->hmsg_ack_in[i].fromcore);
       }
 
       // next state    
@@ -199,7 +201,7 @@ void corethreadhswork(void *cpuidptr) {
       // no work, just "looping" until runcores == false is signaled from core 0
       if (!state->coredone){
         state->coredone = true;
-        sync_printf(cpuid, "Core %d done (default final state)\n", cpuid);
+        sync_printf(cpuid, "core %d done (default final state)\n", cpuid);
       }
       break;
     }
@@ -209,7 +211,7 @@ void corethreadhswork(void *cpuidptr) {
     if(state->loopcount == 5) {
       // signal to stop the slave cores
       state->runcores = false; 
-      sync_printf(0, "Core 0: roundstate == false signalled\n");
+      sync_printf(0, "core 0: roundstate == false signalled\n");
     }  
   }
   state->loopcount++;

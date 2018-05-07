@@ -28,10 +28,10 @@ static volatile _UNCACHED int printtoken = -1;
 static volatile _UNCACHED bool firsttime = true;
 
 // call it with the core id so there are no race conditions
-void sync_printf(int cid, const char *format, ...)
+void sync_printf(const int cid, const char *format, ...)
 {
   //uncomment next line to run with shared mutex
-  //while(printtoken != -1){};
+  while(printtoken != -1){};
   
   printtoken = cid;
   if (mi[cid] < SYNCPRINTBUF)
@@ -126,7 +126,7 @@ void sync_print_core(int id)
       }
     }
     if (closestcoreid == id){
-      printf("[cyc%d cpuid%02d #%02d] %s", 
+      printf("  [cyc%06d cpuid%02d #%02d] %s", 
              (int)timestamps[closestcoreid][minmark[closestcoreid]], 
              closestcoreid, minmark[closestcoreid], 
              strings[closestcoreid][minmark[closestcoreid]]);

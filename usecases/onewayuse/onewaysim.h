@@ -213,6 +213,9 @@ typedef struct State {
   unsigned int prevhyperperiod[TDMSLOTS];
 
 #elif USECASE==3
+  int txcnt;
+  es_msg_t esmsg_out;
+  es_msg_t esmsg_in[TDMSLOTS];
 
 #elif USECASE==4
 
@@ -240,7 +243,7 @@ int getrxcorefromtxcoreslot(int txcore, int txslot);
 int gettxcorefromrxcoreslot(int rxcore, int rxslot);
 
 #ifndef RUNONPATMOS
-extern pthread_t cpu_id_tid[CORES];
+//extern pthread_t cpu_id_tid[CORES];
 int get_cpuid();
 #endif
 

@@ -15,15 +15,13 @@
 
 int tbstriggerwork(int cpuid, int txcid) {
 	unsigned int cyclecnt = getcycles();
-	sync_printf(cpuid, "Usecase: Time-synced trigger by tx core %d!!!\n", txcid);
+	sync_printf(cpuid, "use-case: Time-synced trigger by tx core %d!!!\n", txcid);
 	return cyclecnt;
 }
 
 // detect cycle/time in rx registers
 void corethreadtbswork(void *cpuidptr) {
 	int cpuid = *((int*) cpuidptr);
-	sync_printf(cpuid, "in corethreadtbs(%d)...\n", cpuid);
-
 	State *state;
   #ifdef RUNONPATMOS
 	State statevar;
@@ -32,6 +30,9 @@ void corethreadtbswork(void *cpuidptr) {
   #else 
 	state = &states[cpuid];
   #endif
+
+  if (state->loopcount == 0) 
+    sync_printf(cpuid, "in corethreadtbs(%d)...\n", cpuid);
 
 	//while (runcores) {
 	switch (state->state) {
@@ -76,7 +77,7 @@ void corethreadtbswork(void *cpuidptr) {
       // until the other cores also reach their final state or max loops 
 			if (!state->coredone){
 				state->coredone = true;
-				sync_printf(cpuid, "Core %d done (default final state)\n", cpuid);
+				sync_printf(cpuid, "core %d done (default final state)\n", cpuid);
 			}
 			break;
 		}
@@ -86,7 +87,7 @@ void corethreadtbswork(void *cpuidptr) {
 		if(state->loopcount == 5) {
       // signal to stop the slave cores
 			state->runcores = false; 
-			sync_printf(0, "Core 0: roundstate == false signalled\n");
+			sync_printf(0, "core 0: roundstate == false signalled\n");
 		}  
 	}
 	state->loopcount++;
