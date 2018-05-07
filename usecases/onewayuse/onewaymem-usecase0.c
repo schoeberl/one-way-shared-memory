@@ -90,7 +90,7 @@
   #ifdef RUNONPATMOS
     // stack allocation
     State statevar;
-    memset(statevar, 0, sizeof(statevar));
+    memset(&statevar, 0, sizeof(statevar));
     state = &statevar;
   #else 
     state = &states[cpuid];

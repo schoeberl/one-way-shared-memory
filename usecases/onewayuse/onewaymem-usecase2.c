@@ -25,7 +25,7 @@ void corethreadhswork(void *cpuidptr) {
   State *state;
   #ifdef RUNONPATMOS
   State statevar;
-  memset(statevar, 0, sizeof(statevar));
+  memset(&statevar, 0, sizeof(statevar));
   state = &statevar;
   #else 
   state = &states[cpuid];

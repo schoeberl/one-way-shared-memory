@@ -154,16 +154,19 @@ int main(int argc, char *argv[])
   
 #if USECASE==0
   printf("USECASE = 0\n");
-  corefuncptr = &corethreadtbswork;
+  corefuncptr = &corethreadtestwork;
 #elif USECASE==1
   printf("USECASE == 1\n");
-  corefuncptr = &corethreadhswork;
+  corefuncptr = &corethreadtbswork;
 #elif USECASE==2
   printf("USECASE == 2\n");
-  corefuncptr = &corethreadeswork;
+  corefuncptr = &corethreadhswork;
 #elif USECASE==3
   printf("USECASE == 3\n");
-  corefuncptr = &corethreadsdbwork;        
+  corefuncptr = &corethreadeswork;
+#elif USECASE==4
+  printf("USECASE == 4\n");
+  corefuncptr = &corethreadsdbwork;
 #else
   printf("Unimplemented USECASE value. Exit\n");
   exit(0);

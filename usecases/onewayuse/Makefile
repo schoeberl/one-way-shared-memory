@@ -1,5 +1,5 @@
 MAIN?=onewaymem-patmos_onewayuse
-EXTRAFILES = onewaymem-usecases.c syncprint.c
+EXTRAFILES = onewaymem-usecases.c onewaymem-usecase$(usecase).c syncprint.c
 
 all:
 	test $(usecase)
