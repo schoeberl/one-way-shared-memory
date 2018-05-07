@@ -1,7 +1,7 @@
 //syncprint.h
 #ifndef SYNCPRINT_H
 #define SYNCPRINT_H
-#include <math.h>
+
 #include <locale.h>
 #include "onewaysim.h"
 
@@ -19,7 +19,7 @@
 
 // Configuration:
 // How many cores need printing
-#define PRINTCORES 4
+#define PRINTCORES CORES
 // How many lines the printfbuffer can store for each core (0, 1, 2, ...)
 //   and one "extra for info-printing on core 0
 #define SYNCPRINTBUF 600

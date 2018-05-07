@@ -9,9 +9,18 @@
   License: Simplified BSD
 */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <string.h>
+#ifndef RUNONPATMOS
+#include <time.h>
+#endif
 #include <math.h>
-#include <stdint.h>
 #include <inttypes.h>
+#include "syncprint.h"
 
 #ifdef __patmos__
   #define RUNONPATMOS
@@ -32,8 +41,8 @@
 // See:https://github.com/schoeberl/one-way-shared-memory/blob/master/src/main/scala/oneway/Network.scala
 
 #define FOURNODES "nel|"\
-                  "  nl|"\
-                  "   el|"
+"  nl|"\
+"   el|"
 #define FOURNODES_N 4
 
 // do edit this to set up the NoC grid and buffer
@@ -164,7 +173,9 @@ void corethreadhswork(void *noarg);
 void corethreadeswork(void *noarg);
 void corethreadsdbwork(void *noarg);
 
+// state that can be shared
 typedef struct State {
+  // State common to any use-case
   // the core id
   int cpuid;
   // states...
@@ -175,12 +186,37 @@ typedef struct State {
   bool corerunning;
   // when the core is just spinning in the last waiting state
   bool coredone;
-  // flags for different use in use cases
-  bool flags[255];
-  // values for different use in different use-cases
-  int  vals[255];
   // the global flag (mirroed locally)
   bool runcores;
+  // Local state per use-case as needed
+#if USECASE==0
+
+#elif USECASE==1
+  // previous hyperperiod (used to detect/poll for new hyperperiod)
+  unsigned int prevhyperperiod[TDMSLOTS];
+  int startcycle;
+  int stopcycle[TDMSLOTS];
+
+#elif USECASE==2
+  unsigned int step;
+  unsigned int txcnt;
+  unsigned int hyperperiod;
+  int starttime;
+  int endtime;
+  unsigned int blockno;
+  // set up the use case so all cores will send a handshake message to the other cores
+  // and receive the appropriate acknowledgement
+  handshakemsg_t hmsg_out[TDMSLOTS];
+  handshakemsg_t hmsg_in[TDMSLOTS];
+  handshakeack_t hmsg_ack_out[TDMSLOTS];
+  handshakeack_t hmsg_ack_in[TDMSLOTS];
+  unsigned int prevhyperperiod[TDMSLOTS];
+
+#elif USECASE==3
+
+#elif USECASE==4
+
+#endif
 } State;
 
 #ifndef RUNONPATMOS
@@ -204,13 +240,17 @@ int getrxcorefromtxcoreslot(int txcore, int txslot);
 int gettxcorefromrxcoreslot(int rxcore, int rxslot);
 
 #ifndef RUNONPATMOS
-  extern pthread_t cpu_id_tid[CORES];
-  int get_cpuid();
+extern pthread_t cpu_id_tid[CORES];
+int get_cpuid();
 #endif
 
 // the two new ones (todo: merge)
 void initroutestrings();
 void showmappings();
+
+void recordhyperperiodwork(int cpuid, unsigned int* hyperperiods);
+void holdandgowork(int cpuid);
+void spinwork(unsigned int waitcycles);
 
 #ifdef RUNONPATMOS
 #define ONEWAY_BASE ((volatile _IODEV int *) 0xE8000000)

@@ -7,16 +7,7 @@
   License: Simplified BSD
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <stdarg.h>
-#include <string.h>
-
-
 #include "onewaysim.h"
-#include "syncprint.h"
 
 int alltxmem[CORES][TDMSLOTS][WORDS];
 int allrxmem[CORES][TDMSLOTS][WORDS];
@@ -127,6 +118,10 @@ void nocinit(void (*corefuncptr)(void *))
     //               &coreid[c]);
     //corefuncptr(&coreid[c]);
   }
+
+  // route like the NoC would have done
+  for (int w = 0; w < WORDS; w++)
+    simcontrol(w);
 }
 
 void noccontrol(void (*corefuncptr)(void *))
@@ -138,9 +133,11 @@ void noccontrol(void (*corefuncptr)(void *))
     for (int c = 0; c < CORES; c++)
       corefuncptr(&coreid[c]);
 
+
+    // route like the NoC
     for (int w = 0; w < WORDS; w++)
       simcontrol(w);
-
+    
     //showmem();
 
     /*
@@ -153,15 +150,9 @@ void noccontrol(void (*corefuncptr)(void *))
 
 void nocdone()
 {
-  sync_printf(0, "in nocdone: waiting for cores to join ...\n");
-  int *retval;
-  // now let the others join
+  sync_printf(0, "in nocdone: cores to join ...\n");
   for (int c = 0; c < CORES; c++) {
-    sync_printf(0, "in nocdone: core thread %d to join...\n", c);
-// the cores *should* join here...
-
-    //pthread_join(threadHandles[c], NULL);
-    sync_printf(0, "in nocdone: core thread %d joined\n", c);
+    sync_printf(0, "  Core %d success: %d\n", c, states[c].coredone);
   }
 }
 
@@ -190,7 +181,7 @@ int main(int argc, char *argv[])
   corefuncptr = &corethreadtestwork;
 #elif USECASE==1
   printf("USECASE == 1\n");
-  corefuncptr = &corethreadhswork;
+  corefuncptr = &corethreadtbswork;
 #elif USECASE==2
   printf("USECASE == 1\n");
   corefuncptr = &corethreadhswork;

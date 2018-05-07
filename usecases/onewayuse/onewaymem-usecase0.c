@@ -1,6 +1,6 @@
 /*
   Software layer for One-Way Shared Memory
-  Use-case 0
+  Use-case 0: Sanity check and verification of actual HW NoC and PC simulator
 
   Copyright: CBS, DTU
   Authors: Rasmus Ulslev Pedersen, Martin Schoeberl
@@ -26,15 +26,15 @@
 //CORE TEST USECASE 0: Sanity check of the NoC itself
 ///////////////////////////////////////////////////////////////////////////////
 
-// This use-case check that the all-to-all delivery works.
-// It checks if the HW NoC (and the simulated NoC) works and if the SW works
-// (i.e., it can detect the all-to-all schedule for different route schedules and 
-// different NoC configurations, 2x2, 3x3, ...). 
-// For the route string:
+// This use-case check that the all-to-all delivery works. This use-case checks
+// the following 2x2 "route string":
 //   nel
 //    nl
 //     el
-// it verifies this corresponding mapping:
+// It checks if the HW NoC (and the simulated NoC) works and if the SW works
+// (i.e., it can detect the all-to-all schedule for different route schedules and 
+// different NoC configurations, 2x2, 3x3, ...).
+// Use-case 0 verifies this corresponding mapping (derived from the route string):
 // Core 0 TX TDM slots:
 //   TDM tx slot 0: to rx core 3
 //   TDM tx slot 1: to rx core 2
@@ -70,16 +70,19 @@
 // 
 // Each word is encoded in a special way:
 //   The 2 top bytes are used for storing tx information and the lower two bytes are
-//   are used for showing rx information. It will allow the rx side to verify both
-//   that the tx side knew who it was sending to and that it (the rx side) knows where
-//   the information (i.e., word) came from.
-//   word (bits) endoding for this double tx and rx test:
-// tx cpuid mask:      0xF000_0000 (limit:  16 cores)
-// tx tdmslot mask:    0x0F00_0000 (limit:  15 slots)
-// tx word index mask: 0x00FF_0000 (limit: 255 words)
-// rx cpuid mask:      0x0000_F000
-// rx tdmslot mask:    0x0000_0F00
-// rx word index mask: 0x0000_00FF  
+//   are used for showing rx information (known to the tx core at transmit time). 
+//   It will allow on the rx side to verify both
+//   that the tx side knew who (core and tdm slot) it was sending to and that it 
+//   (the rx side) knows where the information (i.e., word) came from (i.e., tx core 
+//   and tx tdm slot). Each 
+// Word (bits) endoding for this tx / rx test:
+//   tx cpuid mask:      0xF000_0000 (limit:  16 cores)
+//   tx tdmslot mask:    0x0F00_0000 (limit:  15 slots)
+//   tx word index mask: 0x00FF_0000 (limit: 255 words)
+//   rx cpuid mask:      0x0000_F000
+//   rx tdmslot mask:    0x0000_0F00
+//   rx word index mask: 0x0000_00FF  
+
   void corethreadtestwork(void *cpuidptr) {
     int cpuid = getcpuidfromptr(cpuidptr);
     printf("in corethreadtestwork(%d)...\n", cpuid);
@@ -94,10 +97,10 @@
   #endif
 
     // do control loop
-    {
-      // individual core states
+    //{
+      // switch on core state
       switch (state->state) {
-        case 0: { // tx
+        case 0: { // state 0: encode and tx words
           printf("State 0, Core %d\n", cpuid);
           for (int w = 0; w < WORDS; w++) {
             for (int txslot = 0; txslot < TDMSLOTS; txslot++) {
@@ -123,7 +126,10 @@
               0x00000100 * rx_tdmslot +
               0x00000001 * rx_word_index;
 
-              // set tx word
+              // set tx word in the tdm slot
+              // on Patmos the NoC HW will route it to its rx core rx tdm slot
+              // on the PC the simcontrol function will copy it from the tx slot to the 
+              //  rx core rx tdm slot
               core[tx_cpuid].tx[tx_tdmslot][tx_word_index] = txword;
             }
           }
@@ -131,17 +137,15 @@
             state->state++;
           }
           break;
-        } // case 0
+        }
 
-
-        // state 1: 
-        case 1: { // rx 
+        case 1: { // state 1: rx, decode, and verify all words 
           printf("State 1, Core %d\n", cpuid);
-          // check rx words
+          // check all rx words
           bool rxwords_ok = true;
           for (int w = 0; w < WORDS; w++) {
             for (int rxslot = 0; rxslot < TDMSLOTS; rxslot++) {
-
+              
               unsigned int rx_cpuid = cpuid;
               unsigned int rx_tdmslot = rxslot;
               unsigned int rx_word_index = w;
@@ -158,7 +162,7 @@
               
               unsigned int rxword = core[rx_cpuid].rx[rx_tdmslot][rx_word_index];
               
-              // decode and check
+              // decode 
               unsigned int decoded_tx_cpuid = (rxword & 0xF0000000)>>28;
               unsigned int decoded_tx_tdmslot = (rxword & 0x0F000000)>>24;
               unsigned int decoded_tx_word_index = (rxword & 0x00FF0000)>>16;
@@ -166,7 +170,7 @@
               unsigned int decoded_rx_tdmslot = (rxword & 0x00000F00)>>8;
               unsigned int decoded_rx_word_index = rxword & 0x000000FF;
 
-              // check this rxword
+              // , check this rx word
               bool rxword_ok = true;
               rxword_ok = rxword_ok && (decoded_tx_cpuid == tx_cpuid);
               rxword_ok = rxword_ok && (decoded_tx_tdmslot == tx_tdmslot);
@@ -175,13 +179,13 @@
               rxword_ok = rxword_ok && (decoded_rx_tdmslot == rx_tdmslot);
               rxword_ok = rxword_ok && (decoded_rx_word_index == rx_word_index);
 
-              // all rxwords so far
+              // , and remember result for all rxwords so far
               rxwords_ok = rxwords_ok && rxword_ok;
             }
           }
-          // next state
+          // final state if rxwords are ok
+          // otherwise stay in state until the NoC has delivered all the words
           if (rxwords_ok) {
-            state->coredone = true;
             state->state++;
           }
 
@@ -190,16 +194,18 @@
 
         default: {
           // no work, just "looping" until runcores == false is signaled from core 0
-          printf("State default, Core %d\n", cpuid);
+                    
+          // Only log first time this state is reached (it may loop for a while)
+          // until the other cores also reach their final state or max loops
+          // are reached
           if (!state->coredone){
+          	printf("Done (final default state reached), Core %d\n", cpuid);
             state->coredone = true;
-            sync_printf(cpuid, "Core %d done ok!\n", cpuid);
+            sync_printf(cpuid, "Core %d done (default final state)\n", cpuid);
           }
           break;
         }
-      }
-
-
+      //}
     }
 
     if (cpuid == 0){

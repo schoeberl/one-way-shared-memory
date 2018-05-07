@@ -41,6 +41,8 @@ void sync_printf(int cid, const char *format, ...)
     va_list args;
     va_start(args, format);
     vsprintf(&strings[cid][mi[cid]][0], format, args);
+    // enable the next line for "peeking at syncprintf"
+    //printf("Syncprint: %s", &strings[cid][mi[cid]][0]);
     va_end(args);
     mi[cid]++;
   }
