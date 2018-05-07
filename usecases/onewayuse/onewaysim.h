@@ -218,7 +218,12 @@ typedef struct State {
   es_msg_t esmsg_in[TDMSLOTS];
 
 #elif USECASE==4
-
+  int txcnt;
+  int roundstate;
+  // double buffers on tx
+  buffer_t buf_out[TDMSLOTS][DOUBLEBUFFERS];
+  // double buffers on rx
+  buffer_t buf_in[TDMSLOTS][DOUBLEBUFFERS];
 #endif
 } State;
 
