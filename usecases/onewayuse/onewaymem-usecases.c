@@ -33,8 +33,18 @@ void spinwork(unsigned int waitcycles){
   while((getcycles()-start) <= waitcycles);
 }
 
+void zeroouttxmem(int cpuid){
+  for (int w = 0; w < WORDS; w++) {
+    for (int i = 0; i < TDMSLOTS; i++) {
+      core[cpuid].tx[i][w] = 0x00000000;
+    }
+  } 
+}
+
 // called by each core thread before starting the state machine
 void holdandgowork(int cpuid){
+  zeroouttxmem(cpuid);
+  spinwork(1e6);
   coreready[cpuid] = true;
   bool allcoresready = false;
   while(!allcoresready){
@@ -84,7 +94,7 @@ void holdandgowork(int cpuid){
 #ifdef RUNONPATMOS
 //static corethread_t corethread[CORES];
 #else
-static pthread_t corethread[CORES];
+//static pthread_t corethread[CORES];
 #endif
 
 ///////////////////////////////////////////////////////////////////

@@ -92,16 +92,19 @@
     State statevar;
     memset(&statevar, 0, sizeof(statevar));
     state = &statevar;
+    state->runcores = true;
   #else 
     state = &states[cpuid];
   #endif
 
-    // do control loop
-    //{
+  #ifdef RUNONPATMOS
+    while(state->runcores)
+  #endif
+    {
       // switch on core state
       switch (state->state) {
         case 0: { // state 0: encode and tx words
-          printf("State 0, Core %d\n", cpuid);
+          sync_printf(cpuid, "state 0, core %d\n", cpuid);
           for (int w = 0; w < WORDS; w++) {
             for (int txslot = 0; txslot < TDMSLOTS; txslot++) {
               int tx_cpuid = cpuid;
@@ -140,12 +143,11 @@
         }
 
         case 1: { // state 1: rx, decode, and verify all words 
-          printf("State 1, Core %d\n", cpuid);
+          sync_printf(cpuid, "state 1, core %d\n", cpuid);
           // check all rx words
           bool rxwords_ok = true;
           for (int w = 0; w < WORDS; w++) {
             for (int rxslot = 0; rxslot < TDMSLOTS; rxslot++) {
-              
               unsigned int rx_cpuid = cpuid;
               unsigned int rx_tdmslot = rxslot;
               unsigned int rx_word_index = w;
@@ -199,20 +201,21 @@
           // until the other cores also reach their final state or max loops
           // are reached
           if (!state->coredone){
-          	printf("Done (final default state reached), Core %d\n", cpuid);
+          	//printf("Done (final default state reached), Core %d\n", cpuid);
             state->coredone = true;
-            sync_printf(cpuid, "Core %d done (default final state)\n", cpuid);
+            state->runcores = false;
+            sync_printf(cpuid, "core %d done (default final state): use-case ok\n", cpuid);
           }
           break;
         }
-      //}
+      }
     }
 
     if (cpuid == 0){
       if(state->loopcount == 3) {
         // signal to stop the slave cores
         state->runcores = false; 
-        sync_printf(0, "Core 0: roundstate == false signalled\n");
+        sync_printf(0, "core 0: roundstate == false signalled\n");
       }  
     }
     state->loopcount++;

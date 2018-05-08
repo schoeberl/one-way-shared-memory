@@ -27,13 +27,18 @@ void corethreadhswork(void *cpuidptr) {
   State statevar;
   memset(&statevar, 0, sizeof(statevar));
   state = &statevar;
+  state->runcore = true;
+  holdandgowork(cpuid);
   #else 
   state = &states[cpuid];
   #endif
 
   if (state->loopcount == 0) 
     sync_printf(cpuid, "in corethreadhsp(%d)...\n", cpuid);
-
+#ifdef RUNONPATMOS
+  while(runcores)
+#endif
+  {
   switch (state->state) {
       // tx messages
     case 0: {
@@ -199,8 +204,12 @@ void corethreadhswork(void *cpuidptr) {
 
     default: {
       // no work, just "looping" until runcores == false is signaled from core 0
+      if (cpuid == 0){
+        runcores = false;
+      }
       if (!state->coredone){
         state->coredone = true;
+        state->runcore = false; 
         sync_printf(cpuid, "core %d done (default final state)\n", cpuid);
       }
       break;
@@ -210,9 +219,10 @@ void corethreadhswork(void *cpuidptr) {
   if (cpuid == 0){
     if(state->loopcount == 5) {
       // signal to stop the slave cores
-      state->runcores = false; 
+      state->runcore = false; 
       sync_printf(0, "core 0: roundstate == false signalled\n");
     }  
   }
   state->loopcount++;
+  }// while
 }

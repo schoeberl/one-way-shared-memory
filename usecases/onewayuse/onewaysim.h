@@ -187,7 +187,7 @@ typedef struct State {
   // when the core is just spinning in the last waiting state
   bool coredone;
   // the global flag (mirroed locally)
-  bool runcores;
+  bool runcore;
   // Local state per use-case as needed
 #if USECASE==0
 

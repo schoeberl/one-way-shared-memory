@@ -21,6 +21,7 @@ void corethreadeswork(void *cpuidptr) {
   State statevar;
   memset(&statevar, 0, sizeof(statevar));
   state = &statevar;
+  state->runcores = true;
   #else 
   state = &states[cpuid];
   #endif
@@ -107,6 +108,7 @@ void corethreadeswork(void *cpuidptr) {
       // no work, just "looping" until runcores == false is signaled from core 0
       if (!state->coredone){
         state->coredone = true;
+        state->runcores = false; 
         sync_printf(cpuid, "core %d done (default final state)\n", cpuid);
       }
       break;
