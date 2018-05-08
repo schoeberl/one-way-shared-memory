@@ -93,7 +93,7 @@ void nocinit(void (*corefuncptr)(void *))
   // set the state struct to zero
   memset(states, 0, sizeof(states));
   for (int c = 0; c < CORES; c++) {
-    states[c].runcores = true;
+    states[c].runcore = true;
   }
 
   // not using 0
@@ -128,7 +128,7 @@ void noccontrol(void (*corefuncptr)(void *))
 {
   //sync_printf(0, "in noccontrol: simulation control when just running on host PC\n");
 
-  while (states[0].runcores){
+  while (states[0].runcore){
     for (int c = 0; c < CORES; c++){
       corefuncptr(&c);
     }
@@ -161,9 +161,9 @@ void precoreloopwork(int loopcnt) {
 // we are core 0
 int main(int argc, char *argv[])
 {
-  printf("***********************************************************\n");
-  printf("onewaysim-target main(): **********************************\n");
-  printf("***********************************************************\n");
+  printf("*******************************************\n");
+  printf("****onewaymem: simulate use-case %d on PC****\n", USECASE);
+  printf("*******************************************\n");
 
   // thread function pointer which is the use case
   void (*corefuncptr)(void *);
@@ -207,9 +207,9 @@ int main(int argc, char *argv[])
     sync_print_core(i);
   }
 
-  printf("****************************************************************\n");
-  printf("Leaving main...done with highlevel simulation\n");
+  printf("***************************************************************\n");
+  printf("Use-case %d result [pass/fail]: %s\n", USECASE, allfinishedok());
   printf("(Remember: Cycles on the PC simulator are *not* real HW cycles)\n");
-  printf("****************************************************************\n");
+  printf("***************************************************************\n");
   return 0;
 }

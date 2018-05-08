@@ -7,20 +7,7 @@
   License: Simplified BSD
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <stdarg.h>
-#include <string.h>
-#include <math.h>
-//#include "libcorethread/corethread.h"
-#ifndef RUNONPATMOS
-#include <time.h>
-#endif
-
 #include "onewaysim.h"
-#include "syncprint.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //CORE TEST USECASE 0: Sanity check of the NoC itself
@@ -83,140 +70,144 @@
 //   rx tdmslot mask:    0x0000_0F00
 //   rx word index mask: 0x0000_00FF  
 
-  void corethreadtestwork(void *cpuidptr) {
-    int cpuid = getcpuidfromptr(cpuidptr);
-    printf("in corethreadtestwork(%d)...\n", cpuid);
-    State *state;
-  #ifdef RUNONPATMOS
-    // stack allocation
-    State statevar;
-    memset(&statevar, 0, sizeof(statevar));
-    state = &statevar;
-    state->runcores = true;
-  #else 
-    state = &states[cpuid];
-  #endif
+void corethreadtestwork(void *cpuidptr) {
+  int cpuid = getcpuidfromptr(cpuidptr);
+  printf("in corethreadtestwork(%d)...\n", cpuid);
+  State *state;
+#ifdef RUNONPATMOS
+  // stack allocation
+  State statevar;
+  memset(&statevar, 0, sizeof(statevar));
+  state = &statevar;
+  state->runcore = true;
+  holdandgowork(cpuid);
+#else 
+  state = &states[cpuid];
+#endif
 
-  #ifdef RUNONPATMOS
-    while(state->runcores)
-  #endif
-    {
-      // switch on core state
-      switch (state->state) {
-        case 0: { // state 0: encode and tx words
-          sync_printf(cpuid, "state 0, core %d\n", cpuid);
-          for (int w = 0; w < WORDS; w++) {
-            for (int txslot = 0; txslot < TDMSLOTS; txslot++) {
-              int tx_cpuid = cpuid;
-              int tx_tdmslot = txslot;
-              int tx_word_index = w;
-              int rx_cpuid = getrxcorefromtxcoreslot(tx_cpuid, tx_tdmslot);
-              int rx_tdmslot = -1;
-              for (int rxslot = 0; rxslot < TDMSLOTS; rxslot++) {
-                int txcore = gettxcorefromrxcoreslot(rx_cpuid, rxslot);
-                if (txcore == tx_cpuid) {
-                  rx_tdmslot = rxslot;
-                  break;
-                }
-              }
-              int rx_word_index = w;
-              
-              // encode
-              unsigned int txword = 0x10000000 * tx_cpuid + 
-              0x01000000 * tx_tdmslot + 
-              0x00010000 * tx_word_index + 
-              0x00001000 * rx_cpuid + 
-              0x00000100 * rx_tdmslot +
-              0x00000001 * rx_word_index;
-
-              // set tx word in the tdm slot
-              // on Patmos the NoC HW will route it to its rx core rx tdm slot
-              // on the PC the simcontrol function will copy it from the tx slot to the 
-              //  rx core rx tdm slot
-              core[tx_cpuid].tx[tx_tdmslot][tx_word_index] = txword;
-            }
-          }
-          if (true) {
-            state->state++;
-          }
-          break;
-        }
-
-        case 1: { // state 1: rx, decode, and verify all words 
-          sync_printf(cpuid, "state 1, core %d\n", cpuid);
-          // check all rx words
-          bool rxwords_ok = true;
-          for (int w = 0; w < WORDS; w++) {
+#ifdef RUNONPATMOS
+  while(runcores)
+#endif
+  {
+    // switch on core state
+    switch (state->state) {
+      case 0: { // state 0: encode and tx words
+        sync_printf(cpuid, "state 0, core %d\n", cpuid);
+        for (int w = 0; w < WORDS; w++) {
+          for (int txslot = 0; txslot < TDMSLOTS; txslot++) {
+            int tx_cpuid = cpuid;
+            int tx_tdmslot = txslot;
+            int tx_word_index = w;
+            int rx_cpuid = getrxcorefromtxcoreslot(tx_cpuid, tx_tdmslot);
+            int rx_tdmslot = -1;
             for (int rxslot = 0; rxslot < TDMSLOTS; rxslot++) {
-              unsigned int rx_cpuid = cpuid;
-              unsigned int rx_tdmslot = rxslot;
-              unsigned int rx_word_index = w;
-              unsigned int tx_cpuid = gettxcorefromrxcoreslot(rx_cpuid, rx_tdmslot);
-              unsigned int tx_tdmslot = -1;
-              for (unsigned int txslot = 0; txslot < TDMSLOTS; txslot++) {
-                int rxcore = getrxcorefromtxcoreslot(tx_cpuid, txslot);
-                if (rxcore == rx_cpuid) {
-                  tx_tdmslot = txslot;
-                  break;
-                }
+              int txcore = gettxcorefromrxcoreslot(rx_cpuid, rxslot);
+              if (txcore == tx_cpuid) {
+                rx_tdmslot = rxslot;
+                break;
               }
-              unsigned int tx_word_index = w;
-              
-              unsigned int rxword = core[rx_cpuid].rx[rx_tdmslot][rx_word_index];
-              
-              // decode 
-              unsigned int decoded_tx_cpuid = (rxword & 0xF0000000)>>28;
-              unsigned int decoded_tx_tdmslot = (rxword & 0x0F000000)>>24;
-              unsigned int decoded_tx_word_index = (rxword & 0x00FF0000)>>16;
-              unsigned int decoded_rx_cpuid = (rxword & 0x0000F000)>>12;
-              unsigned int decoded_rx_tdmslot = (rxword & 0x00000F00)>>8;
-              unsigned int decoded_rx_word_index = rxword & 0x000000FF;
-
-              // , check this rx word
-              bool rxword_ok = true;
-              rxword_ok = rxword_ok && (decoded_tx_cpuid == tx_cpuid);
-              rxword_ok = rxword_ok && (decoded_tx_tdmslot == tx_tdmslot);
-              rxword_ok = rxword_ok && (decoded_tx_word_index == tx_word_index);
-              rxword_ok = rxword_ok && (decoded_rx_cpuid == rx_cpuid);
-              rxword_ok = rxword_ok && (decoded_rx_tdmslot == rx_tdmslot);
-              rxword_ok = rxword_ok && (decoded_rx_word_index == rx_word_index);
-
-              // , and remember result for all rxwords so far
-              rxwords_ok = rxwords_ok && rxword_ok;
             }
-          }
-          // final state if rxwords are ok
-          // otherwise stay in state until the NoC has delivered all the words
-          if (rxwords_ok) {
-            state->state++;
-          }
+            int rx_word_index = w;
+            
+            // encode
+            unsigned int txword = 0x10000000 * tx_cpuid + 
+            0x01000000 * tx_tdmslot + 
+            0x00010000 * tx_word_index + 
+            0x00001000 * rx_cpuid + 
+            0x00000100 * rx_tdmslot +
+            0x00000001 * rx_word_index;
 
-          break;
-        }
-
-        default: {
-          // no work, just "looping" until runcores == false is signaled from core 0
-                    
-          // Only log first time this state is reached (it may loop for a while)
-          // until the other cores also reach their final state or max loops
-          // are reached
-          if (!state->coredone){
-          	//printf("Done (final default state reached), Core %d\n", cpuid);
-            state->coredone = true;
-            state->runcores = false;
-            sync_printf(cpuid, "core %d done (default final state): use-case ok\n", cpuid);
+            // set tx word in the tdm slot
+            // on Patmos the NoC HW will route it to its rx core rx tdm slot
+            // on the PC the simcontrol function will copy it from the tx slot to the 
+            //  rx core rx tdm slot
+            core[tx_cpuid].tx[tx_tdmslot][tx_word_index] = txword;
           }
-          break;
         }
+        if (true) {
+          state->state++;
+        }
+        break;
       }
-    }
+
+      case 1: { // state 1: rx, decode, and verify all words 
+        sync_printf(cpuid, "state 1, core %d\n", cpuid);
+        // check all rx words
+        bool rxwords_ok = true;
+        for (int w = 0; w < WORDS; w++) {
+          for (int rxslot = 0; rxslot < TDMSLOTS; rxslot++) {
+            unsigned int rx_cpuid = cpuid;
+            unsigned int rx_tdmslot = rxslot;
+            unsigned int rx_word_index = w;
+            unsigned int tx_cpuid = gettxcorefromrxcoreslot(rx_cpuid, rx_tdmslot);
+            unsigned int tx_tdmslot = -1;
+            for (unsigned int txslot = 0; txslot < TDMSLOTS; txslot++) {
+              int rxcore = getrxcorefromtxcoreslot(tx_cpuid, txslot);
+              if (rxcore == rx_cpuid) {
+                tx_tdmslot = txslot;
+                break;
+              }
+            }
+            unsigned int tx_word_index = w;
+            
+            unsigned int rxword = core[rx_cpuid].rx[rx_tdmslot][rx_word_index];
+            
+            // decode 
+            unsigned int decoded_tx_cpuid = (rxword & 0xF0000000)>>28;
+            unsigned int decoded_tx_tdmslot = (rxword & 0x0F000000)>>24;
+            unsigned int decoded_tx_word_index = (rxword & 0x00FF0000)>>16;
+            unsigned int decoded_rx_cpuid = (rxword & 0x0000F000)>>12;
+            unsigned int decoded_rx_tdmslot = (rxword & 0x00000F00)>>8;
+            unsigned int decoded_rx_word_index = rxword & 0x000000FF;
+
+            // , check this rx word
+            bool rxword_ok = true;
+            rxword_ok = rxword_ok && (decoded_tx_cpuid == tx_cpuid);
+            rxword_ok = rxword_ok && (decoded_tx_tdmslot == tx_tdmslot);
+            rxword_ok = rxword_ok && (decoded_tx_word_index == tx_word_index);
+            rxword_ok = rxword_ok && (decoded_rx_cpuid == rx_cpuid);
+            rxword_ok = rxword_ok && (decoded_rx_tdmslot == rx_tdmslot);
+            rxword_ok = rxword_ok && (decoded_rx_word_index == rx_word_index);
+
+            // , and remember result for all rxwords so far
+            rxwords_ok = rxwords_ok && rxword_ok;
+          }
+        }
+        // final state if rxwords are ok
+        // otherwise stay in state until the NoC has delivered all the words
+        if (rxwords_ok) {
+          state->state++;
+        }
+
+        break;
+      }
+
+      default: {
+        // default state: final exit by shared signal 'runcores = false'
+        if (!state->coredone){
+          state->coredone = true;
+          state->runcore = false; 
+          alldone(cpuid);
+          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
+        }
+        if (cpuid == 0){
+          // when all cores are done (i.e., 'default' state) then signal to 
+          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
+          if (alldone(cpuid))
+            runcores = false;
+        }
+        break;
+      }
+    } // switch
 
     if (cpuid == 0){
-      if(state->loopcount == 3) {
+      if(state->loopcount == 1e6) {
+        state->runcore = false; 
         // signal to stop the slave cores
-        state->runcores = false; 
-        sync_printf(0, "core 0: roundstate == false signalled\n");
+        runcores = false;
+        sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
       }  
     }
     state->loopcount++;
-  }
+  } // while
+}

@@ -82,26 +82,29 @@ void corethreadtbswork(void *cpuidptr) {
 		}
 
 		default: {
-      // Only log first time this state is reached (it may loop for a while)
-      // until the other cores also reach their final state or max loops 
-      if (cpuid == 0){
-        runcores = false;
-      }
-			if (!state->coredone){
-				state->coredone = true;
-        state->runcore = false; 
-				sync_printf(cpuid, "core %d done (default final state)\n", cpuid);
-			}
-			break;
+        // default state: final exit by shared signal 'runcores = false'
+        if (!state->coredone){
+          state->coredone = true;
+          state->runcore = false; 
+          alldone(cpuid);
+          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
+        }
+        if (cpuid == 0){
+          // when all cores are done (i.e., 'default' state) then signal to 
+          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
+          if (alldone(cpuid))
+            runcores = false;
+        }
+        break;
 		}
   }	
 
 	if (cpuid == 0){
-		if(state->loopcount == 50000) {
+		if(state->loopcount == 1e6) {
       // signal to stop the slave cores
 			state->runcore = false; 
       runcores = false;
-			sync_printf(0, "core 0: roundstate == false signalled\n");
+			sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
 		}  
 	}
 	state->loopcount++;

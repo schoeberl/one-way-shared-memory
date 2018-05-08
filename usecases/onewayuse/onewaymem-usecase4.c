@@ -18,14 +18,15 @@
 void corethreadsdbwork(void *cpuidptr) {
   int cpuid = *((int*)cpuidptr);
   State *state;
-  #ifdef RUNONPATMOS
+#ifdef RUNONPATMOS
   State statevar;
   memset(&statevar, 0, sizeof(statevar));
   state = &statevar;
-  state->runcores = true;
-  #else 
+  state->runcore = true;
+  holdandgowork(cpuid);
+ #else 
   state = &states[cpuid];
-  #endif
+ #endif
   if (state->loopcount == 0) 
     sync_printf(cpuid, "in corethreaddbwork(%d)...\n", cpuid);
   
@@ -52,7 +53,6 @@ void corethreadsdbwork(void *cpuidptr) {
       state->buf_out[i][j].data = (volatile _IODEV int *) (core[cpuid].tx[i] + (j*DBUFSIZE));  
       //sync_printf(cpuid, "&buf_out[tdm=%d][dbuf=%d].data[1] address = %p\n", 
       //  i, j, &state->buf_out[i][j].data[1]);     
-
     }    
   }
 
@@ -66,157 +66,166 @@ void corethreadsdbwork(void *cpuidptr) {
 
   // CORE WORK SECTION //  
   // individual core states incl 0
-  switch (state->state) {
-    // tx buffers
-    case 0: {
-      // UNCOMMENT THIS WHEN NOT DOING MEASUREMENTS
-      //sync_printf(cpuid, "core %d to tx it's buffer in state 0\n", cpuid);
-      if (cpuid == 1) {
-        // first round of tx for the first buffer
-        for(int i=0; i<TDMSLOTS; i++) {
-          //buf_out[i][0].data[0] = cpuid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=0; j < DBUFSIZE; j++){
-            state->buf_out[i][0].data[j] = 2*cpuid*0x10000000 + i*0x1000000 + j*10000 + state->txcnt;
+#ifdef RUNONPATMOS
+  while(runcores)
+#endif
+  {  
+    switch (state->state) {
+      // tx buffers
+      case 0: {
+        // UNCOMMENT THIS WHEN NOT DOING MEASUREMENTS
+        //sync_printf(cpuid, "core %d to tx it's buffer in state 0\n", cpuid);
+        if (cpuid == 1) {
+          // first round of tx for the first buffer
+          for(int i=0; i<TDMSLOTS; i++) {
+            //buf_out[i][0].data[0] = cpuid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+            for(int j=0; j < DBUFSIZE; j++){
+              state->buf_out[i][0].data[j] = 2*cpuid*0x10000000 + i*0x1000000 + j*10000 + state->txcnt;
+            }
+            //sync_printf(cpuid, 
+            //  "buf_out[%d](%d->).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+            //  i, getrxcorefromtxcoreslot(cpuid, i), buf_out[i][0].data[0], 
+            //  buf_out[i][0].data[1], DBUFSIZE-1, buf_out[i][0].data[DBUFSIZE-1]);
           }
-          //sync_printf(cpuid, 
-          //  "buf_out[%d](%d->).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-          //  i, getrxcorefromtxcoreslot(cpuid, i), buf_out[i][0].data[0], 
-          //  buf_out[i][0].data[1], DBUFSIZE-1, buf_out[i][0].data[DBUFSIZE-1]);
+          state->txcnt++;  
         }
-        state->txcnt++;  
+
+        // next state
+        if (true) {
+          state->state++;
+        }
+        break;
       }
 
-      // next state
-      if (true) {
-        state->state++;
-      }
-      break;
-    }
-
-    case 1: {
-      if(cpuid == 1) {
-        // second round of tx for the second buffer
-        for(int i=0; i<TDMSLOTS; i++) {
-          //buf_out[i][1].data[0] = cpuid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
-          for(int j=0; j < DBUFSIZE; j++){
-            state->buf_out[i][1].data[j] = cpuid*0x10000000 + i*0x1000000 + j*10000 + state->txcnt;
+      case 1: {
+        if(cpuid == 1) {
+          // second round of tx for the second buffer
+          for(int i=0; i<TDMSLOTS; i++) {
+            //buf_out[i][1].data[0] = cpuid*0x10000000 + i*0x1000000 + 0*10000 + txcnt; 
+            for(int j=0; j < DBUFSIZE; j++){
+              state->buf_out[i][1].data[j] = cpuid*0x10000000 + i*0x1000000 + j*10000 + state->txcnt;
+            }
+            //sync_printf(cpuid, 
+            //  "buf_out[%d](%d->).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+            //  i, getrxcorefromtxcoreslot(cpuid, i), buf_out[i][1].data[0], 
+            //  buf_out[i][1].data[1], DBUFSIZE-1, buf_out[i][1].data[DBUFSIZE-1]);
           }
-          //sync_printf(cpuid, 
-          //  "buf_out[%d](%d->).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-          //  i, getrxcorefromtxcoreslot(cpuid, i), buf_out[i][1].data[0], 
-          //  buf_out[i][1].data[1], DBUFSIZE-1, buf_out[i][1].data[DBUFSIZE-1]);
+          state->txcnt++;  
         }
-        state->txcnt++;  
+
+        // next state
+        if (true) {
+          state->state++;
+        }
+          
+        break;
       }
 
-      // next state
-      if (true) {
-        state->state++;
-      }
-        
-      break;
-    }
+      
+      case 2: {
+        // rx buffer core 0
+        if(cpuid == 0){
+          // state work
+          sync_printf(cpuid, "core %d state 2 on cycle %d\n", cpuid, getcycles());
+          const int num = 5;
 
+          int cyclestamp[DOUBLEBUFFERS][num];
+          int lastword[DOUBLEBUFFERS][num];
+          int aword = -1;
+          volatile int tmpsum = 0;
+          // Now for real-time measurements between core 1 and core 0
+          //   remember to comment out the sync_print line that is the first statement for
+          //   state case 0 in the switch
+          const int rxslot = 2; // just pick one
+          const int txcoreid = gettxcorefromrxcoreslot(cpuid, rxslot);
+          // start by monitoring the last word of the first buffer
+          aword = state->buf_in[rxslot][0].data[DBUFSIZE-1];
+          for(int i=0; i < num; i++) {
+            for(int j=0; j < DOUBLEBUFFERS; j++){
+              // while(aword == buf_in[rxslot][j].data[DBUFSIZE-1]);
+              aword = state->buf_in[rxslot][j].data[DBUFSIZE-1];
+              cyclestamp[j][i] = getcycles();
+              // core 1 is in TDM slot 2
+              lastword[j][i] = state->buf_in[rxslot][j].data[DBUFSIZE-1];
+              // some actual work use the active buffer (summing it as an example)
+              for(int k=0; k < DBUFSIZE; k++)
+                tmpsum += state->buf_in[rxslot][j].data[k];
+            }
+          }
+          // capture the real end-time. The last 'cyclestamp' is taken before the 
+          //   buffer is used and would report a too small number
+          int endtime = getcycles();
+          // done with real-time stuff. The rest is for "fun". 
+          for(int i=0; i < num; i++){
+            for(int j=0; j < DOUBLEBUFFERS; j++){
+              sync_printf(cpuid, "double buffer %d: cyclestamp[%d] = %d, lastword[%d](1->) = 0x%08x\n",
+                j, i, cyclestamp[j][i], i, lastword[j][i]);
+            }
+          }
+          int totalcycles = endtime - cyclestamp[0][0];
+          sync_printf(cpuid, "total cycles for %d rounds: %d, average = %d\n",
+            num, totalcycles, totalcycles/num);
+
+
+          sync_printf(cpuid, "core 0 in double buffer 0 rx state 1\n", cpuid);
+          for(int i=0; i<TDMSLOTS; i++) {
+            sync_printf(cpuid, 
+              "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+              i, gettxcorefromrxcoreslot(cpuid, i), state->buf_in[i][0].data[0], 
+              state->buf_in[i][0].data[1], DBUFSIZE-1, state->buf_in[i][0].data[DBUFSIZE-1]);
+          }
+
+          sync_printf(cpuid, "core 0 in double buffer 1 rx state 1\n", cpuid);
+          for(int i=0; i<TDMSLOTS; i++) {
+            sync_printf(cpuid, 
+              "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
+              i, gettxcorefromrxcoreslot(cpuid, i), state->buf_in[i][1].data[0], 
+              state->buf_in[i][1].data[1], DBUFSIZE-1, state->buf_in[i][1].data[DBUFSIZE-1]);
+          }
+
+          // check rough timing
+          if(totalcycles < 1e6)
+            sync_printf(cpuid, "double buffer use case ok!\n", cpuid);
+
+        } else {
+          sync_printf(cpuid, "core %d have no rx work in state 1\n", cpuid);
+        }
+
+        // next state    
+        if (true) { 
+          state->state++;
+        }
+        break;
+      }
+
+      default: {
+        // default state: final exit by shared signal 'runcores = false'
+        if (!state->coredone){
+          state->coredone = true;
+          state->runcore = false; 
+          alldone(cpuid);
+          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
+        }
+        if (cpuid == 0){
+          // when all cores are done (i.e., 'default' state) then signal to 
+          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
+          if (alldone(cpuid))
+            runcores = false;
+        }
+        break;
+      }
+    } // switch
     
-    case 2: {
-      // rx buffer core 0
-      if(cpuid == 0){
-        // state work
-        sync_printf(cpuid, "core %d state 2 on cycle %d\n", cpuid, getcycles());
-          //if (cpuid == 0) holdandgowork(cpuid);
-        const int num = 5;
-
-        int cyclestamp[DOUBLEBUFFERS][num];
-        int lastword[DOUBLEBUFFERS][num];
-        int aword = -1;
-        volatile int tmpsum = 0;
-        // Now for real-time measurements between core 1 and core 0
-        //   remember to comment out the sync_print line that is the first statement for
-        //   state case 0 in the switch
-        const int rxslot = 2; // just pick one
-        const int txcoreid = gettxcorefromrxcoreslot(cpuid, rxslot);
-        // start by monitoring the last word of the first buffer
-        aword = state->buf_in[rxslot][0].data[DBUFSIZE-1];
-        for(int i=0; i < num; i++) {
-          for(int j=0; j < DOUBLEBUFFERS; j++){
-  //          while(aword == buf_in[rxslot][j].data[DBUFSIZE-1]);
-            aword = state->buf_in[rxslot][j].data[DBUFSIZE-1];
-            cyclestamp[j][i] = getcycles();
-            // core 1 is in TDM slot 2
-            lastword[j][i] = state->buf_in[rxslot][j].data[DBUFSIZE-1];
-            // some actual work use the active buffer (summing it as an example)
-            for(int k=0; k < DBUFSIZE; k++)
-              tmpsum += state->buf_in[rxslot][j].data[k];
-          }
-        }
-        // capture the real end-time. The last 'cyclestamp' is taken before the 
-        //   buffer is used and would report a too small number
-        int endtime = getcycles();
-        // done with real-time stuff. The rest is for "fun". 
-        for(int i=0; i < num; i++){
-          for(int j=0; j < DOUBLEBUFFERS; j++){
-            sync_printf(cpuid, "double buffer %d: cyclestamp[%d] = %d, lastword[%d](1->) = 0x%08x\n",
-              j, i, cyclestamp[j][i], i, lastword[j][i]);
-          }
-        }
-        int totalcycles = endtime - cyclestamp[0][0];
-        sync_printf(cpuid, "total cycles for %d rounds: %d, average = %d\n",
-          num, totalcycles, totalcycles/num);
-
-
-        sync_printf(cpuid, "core 0 in double buffer 0 rx state 1\n", cpuid);
-        for(int i=0; i<TDMSLOTS; i++) {
-          sync_printf(cpuid, 
-            "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-            i, gettxcorefromrxcoreslot(cpuid, i), state->buf_in[i][0].data[0], 
-            state->buf_in[i][0].data[1], DBUFSIZE-1, state->buf_in[i][0].data[DBUFSIZE-1]);
-        }
-
-        sync_printf(cpuid, "core 0 in double buffer 1 rx state 1\n", cpuid);
-        for(int i=0; i<TDMSLOTS; i++) {
-          sync_printf(cpuid, 
-            "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
-            i, gettxcorefromrxcoreslot(cpuid, i), state->buf_in[i][1].data[0], 
-            state->buf_in[i][1].data[1], DBUFSIZE-1, state->buf_in[i][1].data[DBUFSIZE-1]);
-        }
-
-        // check rough timing
-        if(totalcycles < 1e6)
-          sync_printf(cpuid, "double buffer use case ok!\n", cpuid);
-
-      } else {
-        sync_printf(cpuid, "core %d have no rx work in state 1\n", cpuid);
-      }
-
-
-      // next state    
-      if (true) { 
-        state->state++;
-      }
-      break;
-    }
-
-    default: {
-      // no work, just "looping" until runcores == false is signaled from core 0
-      if (!state->coredone){
-        state->coredone = true;
-        state->runcores = false; 
-        sync_printf(cpuid, "core %d done (default final state)\n", cpuid);
-      }
-      break;
-    }
-
-  }
-  
-  // NOC CONTROL SECTION BY CORE 0//
-  // max state before core 0 stops the mission
-  if (cpuid == 0){
-    state->roundstate++;
-    if(state->roundstate >= 10) {
-      // signal to stop the slave cores (and core 0)
-      state->runcores = false; 
-      sync_printf(0, "core 0 is done, roundstate == false signalled\n");
-      //printf("core 0 is done, roundstate == false signalled\n");
-    }  
-  } 
+    // NOC CONTROL SECTION BY CORE 0//
+    // max state before core 0 stops the mission
+    if (cpuid == 0){
+      state->roundstate++;
+      if(state->roundstate > 1e6) {
+        // signal to stop the slave cores (and core 0)
+        state->runcore = false;
+        runcores = false; 
+        sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
+      }  
+    } 
+  } // while
 }

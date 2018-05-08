@@ -52,6 +52,7 @@ void nocstart(void (*corefuncptr)(void *)){
   
   for(int i = 0; i < CORES; i++){ 
     coreready[i] = false;
+    coredone[i] = false;
     coreid[i] = i;
   }
 
@@ -65,23 +66,16 @@ void nocstart(void (*corefuncptr)(void *)){
 
 void nocwaitdone()
 {
-  printf("waiting for slave cores to join ...\n");
+  sync_printf(0, "waiting for slave cores to join ...\n");
   int *retval;
   // now let the others join
   for (int c = 1; c < CORES; c++)
   {
-    printf("slave core thread %d to join...\n", c);
+    sync_printf(0, "slave core/thread %d to join...\n", c);
     // the cores join here when done...
     corethread_join(c, (void **)&retval);
-    printf("slave core thread %d joined\n", c);
+   sync_printf(0, "slave core/thread %d joined\n", c);
   }
-}
-
-
-// simulator: called by each core each time it starts a new loop in the control loop
-void precoreloopwork(int loopcnt){
-
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -92,30 +86,30 @@ void precoreloopwork(int loopcnt){
 int main(int argc, char *argv[])
 {
   setlocale(LC_ALL,"");
-  printf("****************************************\n");
-  printf("****onewaymem: run usecase on patmos****\n");
-  printf("****************************************\n");
+  printf("*******************************************\n");
+  printf("****onewaymem: run use-case %d on patmos****\n", USECASE);
+  printf("*******************************************\n");
 
   // thread function pointer which is the use case
   void (*corefuncptr)(void *);
   
 #if USECASE==0
-  printf("USECASE = 0\n");
+  printf("USECASE = 0; corethreadtestwork\n");
   corefuncptr = &corethreadtestwork;
 #elif USECASE==1
-  printf("USECASE == 1\n");
+  printf("USECASE == 1: corethreadtbswork\n");
   corefuncptr = &corethreadtbswork;
 #elif USECASE==2
-  printf("USECASE == 2\n");
+  printf("USECASE == 2: corethreadhswork\n");
   corefuncptr = &corethreadhswork;
 #elif USECASE==3
-  printf("USECASE == 3\n");
+  printf("USECASE == 3: corethreadeswork\n");
   corefuncptr = &corethreadeswork;
 #elif USECASE==4
-  printf("USECASE == 4\n");
+  printf("USECASE == 4: corethreadsdbwork\n");
   corefuncptr = &corethreadsdbwork;
 #else
-  printf("Unimplemented USECASE value. Exit\n");
+  printf("Unimplemented USECASE value. Exit...\n");
   exit(0);
 #endif
 
@@ -135,9 +129,10 @@ int main(int argc, char *argv[])
     printf("Sync print from core %d:\n", i);
     sync_print_core(i);
   }
-  
-  printf("****************************************\n");
-  printf("****************************************\n");
+
+  printf("***********************************\n");
+  printf("Use-case %d result [pass/fail]: %s\n", USECASE, allfinishedok());
+  printf("***********************************\n");
   
   return 0;
 }

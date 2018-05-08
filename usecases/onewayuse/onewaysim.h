@@ -61,6 +61,7 @@
 // patmos hardware registers provided via Scala HDL
 volatile _UNCACHED bool runcores;
 volatile _UNCACHED bool coreready[CORES];
+volatile _UNCACHED bool coredone[CORES];
 typedef volatile _UNCACHED unsigned int PATMOS_REGISTER;
 
 // one word delivered from all to all
@@ -231,8 +232,6 @@ typedef struct State {
   State states[CORES];
 #endif
 
-void playandtest();
-
 // uses the router string (e.g., "nel, nl, el", ...)
 // to generate the mappings that rxcorefromtxcoreslot and 
 // txcorefromrxcoreslot use.
@@ -258,6 +257,8 @@ void showmappings();
 
 void recordhyperperiodwork(int cpuid, unsigned int* hyperperiods);
 void holdandgowork(int cpuid);
+bool alldone(int cpuid);
+const char* allfinishedok();
 void spinwork(unsigned int waitcycles);
 
 #ifdef RUNONPATMOS
