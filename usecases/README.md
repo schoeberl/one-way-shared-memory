@@ -50,19 +50,21 @@ The code in the `onewayuse` directory can do two things. First, it can simulate 
 
 The `onpc` target is for PC-based simulation. `RUNONPATMOS` is not defined.
 
-Files in use: onemem-simulator.c, onewaymem-usecases.c, onewaymem-usecase{USECASE}.c, onewaysim.h, syncprint.c, and syncprint.h.
+Files in use: onemem-simulator.c, onewaymem-usecases.c, onewaymem-usecase$(usecase).c, onewaysim.h, syncprint.c, and syncprint.h.
 
 A specific use-case is run by supplying the use-case identifier to the respective make target. The following would execute use-case 0 on the PC:
 
 ```
-make usecase=0 doit
+make usecase=0 onpc
 ```
 
 ## Executing on HW Platform
 
-The `onpatmos` target is for running code directly on Patmos. The following would execute use-case 1 on Patmos HW:
+The `onpatmos` target is for running code directly on Patmos. 
 
-Files in use: onemem-patmos_onewayuse.c, onewaymem-usecases.c, onewaymem-usecase{USECASE}.c, onewaysim.h, syncprint.c, syncprint.h
+Files in use: onemem-patmos_onewayuse.c, onewaymem-usecases.c, onewaymem-usecase$(usecase).c, onewaysim.h, syncprint.c, syncprint.h
+
+The following would execute use-case 1 on Patmos HW:
 
 ```
 make usecase=1 onpatmos
