@@ -20,21 +20,13 @@ void triggerhandshakework(int cpuid) {
 void corethreadhswork(void *cpuidptr) {
   // set this to 0 when doing measurements
   //   if you forget then print statements add about 1e6 cycles to the result!
-  int printon = 1;
+  int printon = 0;
   int cpuid = *((int*)cpuidptr);
   State *state;
-  #ifdef RUNONPATMOS
-  State statevar;
-  memset(&statevar, 0, sizeof(statevar));
-  state = &statevar;
-  state->runcore = true;
-  holdandgowork(cpuid);
-  #else 
-  state = &states[cpuid];
-  #endif
+  statework(&state, cpuid);
 
   if (state->loopcount == 0) 
-    sync_printf(cpuid, "in corethreadhsp(%d)...\n", cpuid);
+    sync_printf(cpuid, "in corethreadhsp(%d): printon=%d\n", cpuid, printon);
 
 #ifdef RUNONPATMOS
   while(runcores)
@@ -205,30 +197,16 @@ void corethreadhswork(void *cpuidptr) {
 
       default: {
         // default state: final exit by shared signal 'runcores = false'
-        if (!state->coredone){
-          state->coredone = true;
-          state->runcore = false; 
-          alldone(cpuid);
-          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
-        }
-        if (cpuid == 0){
-          // when all cores are done (i.e., 'default' state) then signal to 
-          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
-          if (alldone(cpuid))
-            runcores = false;
-        }
+        defaultstatework(&state, cpuid);
         break;
       }
     } // switch
 
     // stop the system if it takes too long (something might be wrong)
     if (cpuid == 0){
-      if(state->loopcount == 1e6) {
-        // signal to stop the slave cores
-        state->runcore = false; 
-        sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
-      }  
+      timeoutcheckcore0(&state);
     }
+    
     state->loopcount++;
   }// while
 }

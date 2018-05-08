@@ -21,6 +21,31 @@ int allrxmem[CORES][TDMSLOTS][WORDS];
 //static volatile _UNCACHED int testval = -1;
 static volatile _UNCACHED int _nextcore = -1;
 
+// called each time the control loop "hits" the default state for a core
+void defaultstatework(State** state, int cpuid){
+  if (!(*state)->coredone){
+    (*state)->coredone = true;
+    (*state)->runcore = false; 
+    alldone(cpuid);
+    sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
+  }
+  if (cpuid == 0){
+    // when all cores are done (i.e., 'default' state) then signal to 
+    // the other cores 1..CORES-1 to stop using the global flag 'runcores'
+    if (alldone(cpuid))
+      runcores = false;
+  }
+}
+
+void timeoutcheckcore0(State** state){
+  if((*state)->loopcount == 1e6) {
+    (*state)->runcore = false; 
+    // signal to stop the slave cores
+    runcores = false;
+    sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
+  } 
+}
+
 int nextcore() {
   _nextcore++;
   if (_nextcore == CORES)

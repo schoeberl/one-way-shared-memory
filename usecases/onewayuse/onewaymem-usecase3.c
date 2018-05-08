@@ -14,20 +14,13 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 void corethreadeswork(void *cpuidptr) {
+  int printon = 0;
   const int cpuid = *((int*)cpuidptr);
-
   State *state;
-  #ifdef RUNONPATMOS
-  State statevar;
-  memset(&statevar, 0, sizeof(statevar));
-  state = &statevar;
-  state->runcore = true;
-  holdandgowork(cpuid);
-  #else 
-  state = &states[cpuid];
-  #endif
+  statework(&state, cpuid);
+
   if (state->loopcount == 0) 
-    sync_printf(cpuid, "in corethreadeswork(%d)...\n", cpuid);
+    sync_printf(cpuid, "in corethreadeswork(%d)...printon=%d\n", cpuid, printon);
 
   state->txcnt = 1;
   unsigned int SENSORID0 = 0x11223344;
@@ -59,7 +52,7 @@ void corethreadeswork(void *cpuidptr) {
             // create reading message
             state->esmsg_out.txstamp   = cpuid*0x10000000 + i*0x1000000 + 0*10000 + state->txcnt;
             state->esmsg_out.sensorid  = SENSORID0;
-            state->esmsg_out.sensorval = getcycles(); // the artificial "temperature" proxy
+            state->esmsg_out.sensorval = sensestart;//getcycles(); // the artificial "temperature" proxy
             // send reading
             core[cpuid].tx[i][0] = state->esmsg_out.txstamp;
             core[cpuid].tx[i][1] = state->esmsg_out.sensorid;          
@@ -78,7 +71,7 @@ void corethreadeswork(void *cpuidptr) {
         // state work
         // now slave cores receive the message
         if(cpuid == 0) {
-          sync_printf(cpuid, "core %d es msg rx in state 1\n", cpuid);
+          if (printon) sync_printf(cpuid, "core %d es msg rx in state 1\n", cpuid);
           int core1id = 1;
           int core1slot = -1;
           for(int i=0; i<TDMSLOTS; i++) {
@@ -89,13 +82,16 @@ void corethreadeswork(void *cpuidptr) {
           state->esmsg_in[cpuid].txstamp   = core[cpuid].rx[core1slot][0];
           state->esmsg_in[cpuid].sensorid  = core[cpuid].rx[core1slot][1];          
           state->esmsg_in[cpuid].sensorval = core[cpuid].rx[core1slot][2];
+          unsigned int endtime = getcycles();
+          unsigned int starttime = state->esmsg_in[cpuid].sensorval;
 
           // only let core 0 move to final state if it has received the sensor reading
           if (state->esmsg_in[cpuid].sensorid == SENSORID0) {
             sync_printf(cpuid, "esmsg_in[%d](%d) 0x%08x 0x%08x 0x%08x\n",
               core1slot, 0, state->esmsg_in[cpuid].txstamp, state->esmsg_in[cpuid].sensorid, 
               state->esmsg_in[cpuid].sensorval);
-            sync_printf(cpuid, "core 1 sensor state to core %d ok\n", cpuid);
+            sync_printf(cpuid, "core 1 sensor state to core %d ok, timediff = %d cycles\n", cpuid, 
+                        endtime - starttime);
             state->state++;
           }
         } else {
@@ -108,29 +104,15 @@ void corethreadeswork(void *cpuidptr) {
 
       default: {
         // default state: final exit by shared signal 'runcores = false'
-        if (!state->coredone){
-          state->coredone = true;
-          state->runcore = false; 
-          alldone(cpuid);
-          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
-        }
-        if (cpuid == 0){
-          // when all cores are done (i.e., 'default' state) then signal to 
-          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
-          if (alldone(cpuid))
-            runcores = false;
-        }
+        defaultstatework(&state, cpuid);
         break;
       }
     }
 
     if (cpuid == 0){
-      if(state->loopcount == 1e6) {
-        // signal to stop the slave cores
-        state->runcore = false; 
-        sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
-      }  
+      timeoutcheckcore0(&state);
     }
+    
     state->loopcount++;
   } // while
 }

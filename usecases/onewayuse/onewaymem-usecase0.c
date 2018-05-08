@@ -74,16 +74,7 @@ void corethreadtestwork(void *cpuidptr) {
   int cpuid = getcpuidfromptr(cpuidptr);
   printf("in corethreadtestwork(%d)...\n", cpuid);
   State *state;
-#ifdef RUNONPATMOS
-  // stack allocation
-  State statevar;
-  memset(&statevar, 0, sizeof(statevar));
-  state = &statevar;
-  state->runcore = true;
-  holdandgowork(cpuid);
-#else 
-  state = &states[cpuid];
-#endif
+  statework(&state, cpuid);
 
 #ifdef RUNONPATMOS
   while(runcores)
@@ -184,30 +175,15 @@ void corethreadtestwork(void *cpuidptr) {
 
       default: {
         // default state: final exit by shared signal 'runcores = false'
-        if (!state->coredone){
-          state->coredone = true;
-          state->runcore = false; 
-          alldone(cpuid);
-          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
-        }
-        if (cpuid == 0){
-          // when all cores are done (i.e., 'default' state) then signal to 
-          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
-          if (alldone(cpuid))
-            runcores = false;
-        }
+        defaultstatework(&state, cpuid);
         break;
       }
     } // switch
 
     if (cpuid == 0){
-      if(state->loopcount == 1e6) {
-        state->runcore = false; 
-        // signal to stop the slave cores
-        runcores = false;
-        sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
-      }  
+      timeoutcheckcore0(&state);
     }
+    
     state->loopcount++;
   } // while
 }

@@ -12,7 +12,10 @@
 int alltxmem[CORES][TDMSLOTS][WORDS];
 int allrxmem[CORES][TDMSLOTS][WORDS];
 
-//pthread_t *threadHandles;
+void statework(State **state, int cpuid) {
+  *state = &states[cpuid];
+  (*state)->runcore = true;
+}
 
 void showmem() {
   printf("showmem():\n");
@@ -144,7 +147,7 @@ void nocdone()
 {
   sync_printf(0, "in nocdone: cores to join ...\n");
   for (int c = 0; c < CORES; c++) {
-    sync_printf(0, "  Core %d success: %d\n", c, states[c].coredone);
+    sync_printf(0, "  core %d success: %d\n", c, states[c].coredone);
   }
 }
 

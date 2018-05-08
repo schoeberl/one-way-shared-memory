@@ -33,7 +33,6 @@
   #define _SPM
   #define _IODEV
   #define _UNCACHED
-  #include <pthread.h>
   #include <sched.h>
 #endif
 
@@ -150,6 +149,61 @@ typedef struct buffer_t
   volatile _SPM int *data;
 } buffer_t;
 
+// state that can be shared
+typedef struct State {
+  // State common to any use-case
+  int state;
+  // loop counter for control loop
+  int loopcount;
+  // when the core is running (not in the final waiting state)
+  bool corerunning;
+  // when the core is just spinning in the last waiting state
+  bool coredone;
+  // the global flag (mirroed locally)
+  bool runcore;
+  // Local state per use-case as needed
+#if USECASE==0
+  // ...
+
+#elif USECASE==1
+  // ...
+
+#elif USECASE==2
+  unsigned int step;
+  unsigned int txcnt;
+  unsigned int hyperperiod;
+  unsigned int starttime;
+  unsigned int endtime;
+  unsigned int blockno;
+  // set up the use case so all cores will send a handshake message to the other cores
+  // and receive the appropriate acknowledgement
+  handshakemsg_t hmsg_out[TDMSLOTS];
+  handshakemsg_t hmsg_in[TDMSLOTS];
+  handshakeack_t hmsg_ack_out[TDMSLOTS];
+  handshakeack_t hmsg_ack_in[TDMSLOTS];
+  unsigned int prevhyperperiod[TDMSLOTS];
+
+#elif USECASE==3
+  int txcnt;
+  es_msg_t esmsg_out;
+  es_msg_t esmsg_in[TDMSLOTS];
+
+#elif USECASE==4
+  int txcnt;
+  int roundstate;
+  unsigned int starttime;
+  unsigned int endtime;
+  // double buffers on tx
+  buffer_t buf_out[TDMSLOTS][DOUBLEBUFFERS];
+  // double buffers on rx
+  buffer_t buf_in[TDMSLOTS][DOUBLEBUFFERS];
+#endif
+} State;
+
+#ifndef RUNONPATMOS
+  State states[CORES];
+#endif
+
 // init patmos (simulated) internals
 Core core[CORES];
 // signal used to stop terminate the cores
@@ -174,64 +228,6 @@ void corethreadhswork(void *noarg);
 void corethreadeswork(void *noarg);
 void corethreadsdbwork(void *noarg);
 
-// state that can be shared
-typedef struct State {
-  // State common to any use-case
-  // the core id
-  int cpuid;
-  // states...
-  int state;
-  // loop counter for control loop
-  int loopcount;
-  // when the core is running (not in the final waiting state)
-  bool corerunning;
-  // when the core is just spinning in the last waiting state
-  bool coredone;
-  // the global flag (mirroed locally)
-  bool runcore;
-  // Local state per use-case as needed
-#if USECASE==0
-
-#elif USECASE==1
-  // previous hyperperiod (used to detect/poll for new hyperperiod)
-  unsigned int prevhyperperiod[TDMSLOTS];
-  int startcycle;
-  int stopcycle[TDMSLOTS];
-
-#elif USECASE==2
-  unsigned int step;
-  unsigned int txcnt;
-  unsigned int hyperperiod;
-  int starttime;
-  int endtime;
-  unsigned int blockno;
-  // set up the use case so all cores will send a handshake message to the other cores
-  // and receive the appropriate acknowledgement
-  handshakemsg_t hmsg_out[TDMSLOTS];
-  handshakemsg_t hmsg_in[TDMSLOTS];
-  handshakeack_t hmsg_ack_out[TDMSLOTS];
-  handshakeack_t hmsg_ack_in[TDMSLOTS];
-  unsigned int prevhyperperiod[TDMSLOTS];
-
-#elif USECASE==3
-  int txcnt;
-  es_msg_t esmsg_out;
-  es_msg_t esmsg_in[TDMSLOTS];
-
-#elif USECASE==4
-  int txcnt;
-  int roundstate;
-  // double buffers on tx
-  buffer_t buf_out[TDMSLOTS][DOUBLEBUFFERS];
-  // double buffers on rx
-  buffer_t buf_in[TDMSLOTS][DOUBLEBUFFERS];
-#endif
-} State;
-
-#ifndef RUNONPATMOS
-  State states[CORES];
-#endif
-
 // uses the router string (e.g., "nel, nl, el", ...)
 // to generate the mappings that rxcorefromtxcoreslot and 
 // txcorefromrxcoreslot use.
@@ -247,7 +243,6 @@ int getrxcorefromtxcoreslot(int txcore, int txslot);
 int gettxcorefromrxcoreslot(int rxcore, int rxslot);
 
 #ifndef RUNONPATMOS
-//extern pthread_t cpu_id_tid[CORES];
 int get_cpuid();
 #endif
 
@@ -260,6 +255,9 @@ void holdandgowork(int cpuid);
 bool alldone(int cpuid);
 const char* allfinishedok();
 void spinwork(unsigned int waitcycles);
+void statework(State **state, int cpuid);
+void defaultstatework(State **state, int cpuid);
+void timeoutcheckcore0(State** state);
 
 #ifdef RUNONPATMOS
 #define ONEWAY_BASE ((volatile _IODEV int *) 0xE8000000)
@@ -273,5 +271,4 @@ extern int allrxmem[CORES][CORES - 1][WORDS];
 // get cycles (patmos) or time (pc)
 int getcycles();
 
-//unsigned int rdtsc();
-#endif
+#endif //  ONEWAYSIM_H

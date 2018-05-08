@@ -13,6 +13,15 @@
 // cores other than core 0 are called "slave" cores because core 0 have a dual role
 //   both as a thread work core and as the noc control core.
 
+void statework(State **state, int cpuid) {
+  // stack allocation
+  State statevar;
+  memset(&statevar, 0, sizeof(statevar));
+  *state = &statevar;
+  (*state)->runcore = true;
+  holdandgowork(cpuid);
+}
+
 void nocmeminit()
 {
   // map ms's core mem arrray for indexed access

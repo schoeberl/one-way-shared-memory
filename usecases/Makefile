@@ -7,7 +7,7 @@ help:
 	#doit usecase=U0: run the simulator only on the host
 	#onpatmos: run the test on patmos
 
-doit: 
+onpc: 
 	@if test -z "$(usecase)"; then echo "usecase not defined; see README.md"; exit 1; fi
 	rm -f ./a.out
 	cd onewayuse && $(CC) -I$(PATMOSHOME)/../newlib/newlib/libc/machine/patmos -pthread -g $(HOSTSOURCEFILES) onewaymem-usecase$(usecase).c -D USECASE=$(usecase)
@@ -18,7 +18,6 @@ doit:
 #  then do this (gdb) run and (gdb) backtrace
 debug:
 	cd onewayuse && gdb ./a.out
-
 
 onpatmos: 
 	@if test -z "$(usecase)"; then echo "usecase not defined; see README.md"; exit 1; fi

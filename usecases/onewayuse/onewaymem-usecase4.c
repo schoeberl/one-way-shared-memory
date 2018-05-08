@@ -18,15 +18,8 @@
 void corethreadsdbwork(void *cpuidptr) {
   int cpuid = *((int*)cpuidptr);
   State *state;
-#ifdef RUNONPATMOS
-  State statevar;
-  memset(&statevar, 0, sizeof(statevar));
-  state = &statevar;
-  state->runcore = true;
-  holdandgowork(cpuid);
- #else 
-  state = &states[cpuid];
- #endif
+  statework(&state, cpuid);
+
   if (state->loopcount == 0) 
     sync_printf(cpuid, "in corethreaddbwork(%d)...\n", cpuid);
   
@@ -75,6 +68,7 @@ void corethreadsdbwork(void *cpuidptr) {
       case 0: {
         // UNCOMMENT THIS WHEN NOT DOING MEASUREMENTS
         //sync_printf(cpuid, "core %d to tx it's buffer in state 0\n", cpuid);
+        state->starttime = getcycles();
         if (cpuid == 1) {
           // first round of tx for the first buffer
           for(int i=0; i<TDMSLOTS; i++) {
@@ -154,7 +148,7 @@ void corethreadsdbwork(void *cpuidptr) {
           }
           // capture the real end-time. The last 'cyclestamp' is taken before the 
           //   buffer is used and would report a too small number
-          int endtime = getcycles();
+          state->endtime = getcycles();
           // done with real-time stuff. The rest is for "fun". 
           for(int i=0; i < num; i++){
             for(int j=0; j < DOUBLEBUFFERS; j++){
@@ -162,12 +156,10 @@ void corethreadsdbwork(void *cpuidptr) {
                 j, i, cyclestamp[j][i], i, lastword[j][i]);
             }
           }
-          int totalcycles = endtime - cyclestamp[0][0];
-          sync_printf(cpuid, "total cycles for %d rounds: %d, average = %d\n",
-            num, totalcycles, totalcycles/num);
 
 
-          sync_printf(cpuid, "core 0 in double buffer 0 rx state 1\n", cpuid);
+
+          sync_printf(cpuid, "core 0 in double buffer 0 rx state 2\n", cpuid);
           for(int i=0; i<TDMSLOTS; i++) {
             sync_printf(cpuid, 
               "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
@@ -175,7 +167,7 @@ void corethreadsdbwork(void *cpuidptr) {
               state->buf_in[i][0].data[1], DBUFSIZE-1, state->buf_in[i][0].data[DBUFSIZE-1]);
           }
 
-          sync_printf(cpuid, "core 0 in double buffer 1 rx state 1\n", cpuid);
+          sync_printf(cpuid, "core 0 in double buffer 1 rx state 2\n", cpuid);
           for(int i=0; i<TDMSLOTS; i++) {
             sync_printf(cpuid, 
               "buf_in[%d](->%d).data[0]=0x%08x : .data[1]=0x%08x ... .data[%d]=0x%08x\n",
@@ -183,12 +175,11 @@ void corethreadsdbwork(void *cpuidptr) {
               state->buf_in[i][1].data[1], DBUFSIZE-1, state->buf_in[i][1].data[DBUFSIZE-1]);
           }
 
-          // check rough timing
-          if(totalcycles < 1e6)
-            sync_printf(cpuid, "double buffer use case ok!\n", cpuid);
-
+          int totalcycles = state->endtime - state->starttime;
+          sync_printf(cpuid, "use-case cycles = %d\n", totalcycles);
+          
         } else {
-          sync_printf(cpuid, "core %d have no rx work in state 1\n", cpuid);
+          sync_printf(cpuid, "core %d have no rx work in state 2\n", cpuid);
         }
 
         // next state    
@@ -200,18 +191,7 @@ void corethreadsdbwork(void *cpuidptr) {
 
       default: {
         // default state: final exit by shared signal 'runcores = false'
-        if (!state->coredone){
-          state->coredone = true;
-          state->runcore = false; 
-          alldone(cpuid);
-          sync_printf(cpuid, "core %d done (default final state): use case ok\n", cpuid);
-        }
-        if (cpuid == 0){
-          // when all cores are done (i.e., 'default' state) then signal to 
-          // the other cores 1..CORES-1 to stop using the global flag 'runcores'
-          if (alldone(cpuid))
-            runcores = false;
-        }
+        defaultstatework(&state, cpuid);
         break;
       }
     } // switch
@@ -219,13 +199,9 @@ void corethreadsdbwork(void *cpuidptr) {
     // NOC CONTROL SECTION BY CORE 0//
     // max state before core 0 stops the mission
     if (cpuid == 0){
-      state->roundstate++;
-      if(state->roundstate > 1e6) {
-        // signal to stop the slave cores (and core 0)
-        state->runcore = false;
-        runcores = false; 
-        sync_printf(0, "core 0:: roundstate == false signalled: use case not ok\n");
-      }  
+      timeoutcheckcore0(&state);
     } 
+
+    state->loopcount++;
   } // while
 }
