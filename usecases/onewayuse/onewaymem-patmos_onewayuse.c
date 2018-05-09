@@ -14,10 +14,7 @@
 //   both as a thread work core and as the noc control core.
 
 void statework(State **state, int cpuid) {
-  // stack allocation
-  State statevar;
-  memset(&statevar, 0, sizeof(statevar));
-  *state = &statevar;
+  *state = &states[cpuid];
   (*state)->runcore = true;
   holdandgowork(cpuid);
 }

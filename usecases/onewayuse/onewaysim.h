@@ -200,9 +200,9 @@ typedef struct State {
 #endif
 } State;
 
-#ifndef RUNONPATMOS
+//#ifndef RUNONPATMOS
   State states[CORES];
-#endif
+//#endif
 
 // init patmos (simulated) internals
 Core core[CORES];
