@@ -1,4 +1,10 @@
-  # onewaymem Use-Case Testing
+# One-Way Memory Use-Cases
+
+This repository contains the use-cases that have been used in the evaluation
+section of following paper:
+
+Martin Schoeberl and Rasmus Ulslev Pedersen, One-Way Memory, submitted to the
+Journal of Systems Architecture.
 
 ## Abstract
 
@@ -46,7 +52,7 @@ The code in the `onewayuse` directory can do two things. First, it can simulate 
 #endif
 ```
 
-## Simulating on PC
+## Simulating on a PC
 
 The `onpc` target is for PC-based simulation. `RUNONPATMOS` is not defined.
 
@@ -58,7 +64,7 @@ A specific use-case is run by supplying the use-case identifier to the respectiv
 make usecase=0 onpc
 ```
 
-## Executing on HW Platform
+## Executing on Hardware Platform
 
 The `onpatmos` target is for running code directly on Patmos. 
 
